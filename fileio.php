@@ -38,6 +38,22 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
         rename($tmp,$fn);
     }
     if(($_POST['gameioaction']=='load')){
+        // Long-polling optionnel (voir js/control.js, LONG_POLL_ENABLED) :
+        // si le client envoie sinceMtime, on attend jusqu'a ce que le fichier
+        // change (ou soit cree) avant de repondre, plutot que de repondre
+        // tout de suite -- borne a 20s, sous le max_execution_time habituel.
+        // ABSENT DE LA REQUETE (comportement historique, tous les clients
+        // actuels) -> ce bloc ne fait strictement rien, reponse immediate
+        // comme avant.
+        if (isset($_POST['sinceMtime']) && is_numeric($_POST['sinceMtime'])) {
+            $since = (int)$_POST['sinceMtime'];
+            $deadline = microtime(true) + 20;
+            while (microtime(true) < $deadline) {
+                clearstatcache(true, $fn);
+                if (file_exists($fn) && filemtime($fn) > $since) break;
+                usleep(300000);
+            }
+        }
         // file_exists() evite l'avertissement PHP de fopen() sur un match
         // jamais sauvegarde (ce warning, affiche avant meme le test de
         // reussite du fopen(), cassait le JSON.parse() cote client).
@@ -46,7 +62,13 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
         // la ligne reel.
         if (file_exists($fn)){
             header('Content-Type: application/json');
+            // Lu par le client en mode long-polling pour son prochain appel
+            // (sinceMtime) -- ignore sans effet par un client qui ne
+            // regarde pas cet en-tete (le corps de la reponse ne change pas).
+            header('X-File-Mtime: ' . filemtime($fn));
             echo(file_get_contents($fn));
+        } else {
+            header('X-File-Mtime: 0');
         }
     }
 }

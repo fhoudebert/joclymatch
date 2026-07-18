@@ -1,0 +1,13 @@
+{
+  "name": "jocly-simple-match-push",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Notificateur WebSocket optionnel (VPS) pour jocly-simple-match -- ne remplace pas le polling existant, voir README.md",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8"
+  }
+}

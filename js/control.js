@@ -43,6 +43,12 @@ function checkIfOtherUserPlayed(delay) {
 function RunMatch(match, progressBar) {
     var movePendingResolver;
 
+    // Reference globale du match en cours -- lue uniquement par
+    // js/push-client.js (composant optionnel, non charge par defaut, voir
+    // push/README.md) pour declencher un reload immediat sur notification.
+    // N'a aucun effet si ce script n'est pas charge.
+    window.currentMatch = match;
+
     // first make sure there is no user input or machine search in progress
     var promise = match.abortUserTurn() // just in case one is running
         .then( () => {
@@ -84,6 +90,16 @@ function RunMatch(match, progressBar) {
                         else {
                             promise = promise.then( () => {                            
                                 if(matchDetails.matchId.length>0) {
+                                    if (typeof LONG_POLL_ENABLED !== 'undefined' && LONG_POLL_ENABLED) {
+                                        // Le serveur retient la reponse jusqu'a
+                                        // un changement (fileio.php, sinceMtime)
+                                        // -- pas besoin du throttle reloadCounter
+                                        // ni d'attendre 500ms cote client, juste
+                                        // un court delai de securite avant de
+                                        // relancer l'appel suivant.
+                                        loadMatchFromID(matchDetails.matchId,match,true);
+                                        return checkIfOtherUserPlayed(200);
+                                    }
                                     if (reloadCounter == 0) loadMatchFromID(matchDetails.matchId,match);
                                     reloadCounter = (reloadCounter+1)%6;
                                 }
@@ -364,13 +380,26 @@ function saveGameIfNecessary(match){
         });
     }
 }
-function loadMatchFromID(gameid,match){
+// Long-polling optionnel (voir push/README.md pour le pendant WebSocket) :
+// n'existe QUE si index.php definit LONG_POLL_ENABLED = true, lui-meme
+// controle par $enableLongPolling dans localconf.php -- absent par defaut,
+// donc lastKnownMtime reste inutilise et le comportement est identique a
+// avant l'ajout de ce mode.
+var lastKnownMtime = 0;
+
+function loadMatchFromID(gameid,match,waitMode){
+    var postData = { gameioaction:"load", gameid:gameid };
+    if (waitMode && typeof LONG_POLL_ENABLED !== 'undefined' && LONG_POLL_ENABLED) {
+        postData.sinceMtime = lastKnownMtime;
+    }
     $.post("./fileio.php", 
-        {
-            gameioaction:"load",
-            gameid:gameid
-        },
-        function(json){
+        postData,
+        function(json, textStatus, jqXHR){
+            var mtimeHeader = jqXHR && jqXHR.getResponseHeader ? jqXHR.getResponseHeader('X-File-Mtime') : null;
+            if (mtimeHeader !== null) {
+                var parsed = parseInt(mtimeHeader, 10);
+                if (!isNaN(parsed)) lastKnownMtime = parsed;
+            }
         // the output of the response is now handled via a variable call 'results'
             // Rien a charger pour l'instant (ex. l'autre joueur n'a pas
             // encore fait son premier coup, le match n'existe pas encore
@@ -483,12 +512,8 @@ $(document).ready(function () {
     
     Jocly.getGameConfig(gameName).then((p)=>{
         gameFullPath = p.view.fullPath ;
-        var rulesPath;
-        if (lg == "fr" && p.model.rules.fr){
-            rulesPath = p.view.fullPath+"/"+p.model.rules.fr ; 
-        }else if (p.model.rules.en){
-            rulesPath = p.view.fullPath+"/"+p.model.rules.en ; 
-        }
+        var rulesPath = p.view.fullPath+"/"+p.model.rules.en ;
+        console.log(rulesPath);
         loadRules(rulesPath,p.view.fullPath);
     })
 
@@ -761,7 +786,7 @@ $(document).ready(function () {
             });
     });
 
-    // save english original texts
+    // save enlglish original texts
     $(".t").each(function(){
         $(this).attr("en-txt",this.innerText);
     });
