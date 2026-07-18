@@ -1,6 +1,15 @@
 <?php
 require "localconf.php";
 
+// gameid sert a construire un nom de fichier (fileName/chatfileName) : on le
+// valide avant tout usage pour empecher une traversee de repertoire
+// (ex. gameid=../../ailleurs/quelquechose). Les identifiants legitimes
+// (generes cote client, ex. Date.now()+"-"+makeid(14)) sont deja uniquement
+// alphanumeriques/tirets, donc ca ne change rien pour l'usage normal.
+if (isset($_POST['gameid']) && !preg_match('/^[A-Za-z0-9_-]+$/', $_POST['gameid'])) {
+    exit;
+}
+
 function fileName($matchId){
     global $savePath;
     return $savePath.$matchId.".txt" ;
@@ -20,16 +29,46 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
         echo("gameaction : ".$_POST['gameioaction']);
         echo("gameid : ".$_POST['gameid']);
         echo("data : ".$_POST['gamedata']);
-        $fp = fopen($fn,"wt");
+        // Ecriture atomique (fichier temporaire puis rename()) : evite qu'un
+        // load() concurrent ne lise un fichier a moitie ecrit.
+        $tmp = $fn.".tmp".uniqid();
+        $fp = fopen($tmp,"wt");
         fputs($fp,$_POST['gamedata']);
         fclose($fp);
+        rename($tmp,$fn);
     }
     if(($_POST['gameioaction']=='load')){
-        $fp = fopen($fn,"rt");
-        if ($fp){
-            $gamedata = fgets($fp);
-            fclose($fp);
-            echo($gamedata);
+        // Long-polling optionnel (voir js/control.js, LONG_POLL_ENABLED) :
+        // si le client envoie sinceMtime, on attend jusqu'a ce que le fichier
+        // change (ou soit cree) avant de repondre, plutot que de repondre
+        // tout de suite -- borne a 20s, sous le max_execution_time habituel.
+        // ABSENT DE LA REQUETE (comportement historique, tous les clients
+        // actuels) -> ce bloc ne fait strictement rien, reponse immediate
+        // comme avant.
+        if (isset($_POST['sinceMtime']) && is_numeric($_POST['sinceMtime'])) {
+            $since = (int)$_POST['sinceMtime'];
+            $deadline = microtime(true) + 20;
+            while (microtime(true) < $deadline) {
+                clearstatcache(true, $fn);
+                if (file_exists($fn) && filemtime($fn) > $since) break;
+                usleep(300000);
+            }
+        }
+        // file_exists() evite l'avertissement PHP de fopen() sur un match
+        // jamais sauvegarde (ce warning, affiche avant meme le test de
+        // reussite du fopen(), cassait le JSON.parse() cote client).
+        // file_get_contents() (plutot que fopen+fgets, qui ne lit qu'UNE
+        // ligne) evite aussi une troncature si gamedata contient un retour a
+        // la ligne reel.
+        if (file_exists($fn)){
+            header('Content-Type: application/json');
+            // Lu par le client en mode long-polling pour son prochain appel
+            // (sinceMtime) -- ignore sans effet par un client qui ne
+            // regarde pas cet en-tete (le corps de la reponse ne change pas).
+            header('X-File-Mtime: ' . filemtime($fn));
+            echo(file_get_contents($fn));
+        } else {
+            header('X-File-Mtime: 0');
         }
     }
 }
@@ -50,8 +89,13 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
         echo("chat saved : ok");
     }
     if(($_POST['chatioaction']=='load')){
-        $fp = fopen($fn,"rt");
-        if ($fp){
+        header('Content-Type: application/json');
+        // Meme cause que pour le load() de partie plus haut : fopen() sur un
+        // fichier absent emettait un avertissement PHP AVANT que le test
+        // ($fp) ne puisse s'en apercevoir, polluant la reponse malgre le
+        // else ci-dessous qui gere pourtant deja correctement ce cas.
+        if (file_exists($fn)){
+            $fp = fopen($fn,"rt");
             while($chatdata = fgets($fp)){
                 $chatdata = substr($chatdata, 0, -1); // to remove the \n
                 $msgs[]=$chatdata;

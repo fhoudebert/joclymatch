@@ -139,6 +139,26 @@
 		
 	<script src="js/common.js"></script>
     <script src="js/control.js"></script>
+	<?php
+	// Long-polling optionnel (voir ANALYSE-PUSH-JOCLYSIMPLEMATCH.md §2/§5) :
+	// absent par defaut ($enableLongPolling non defini dans localconf.php),
+	// donc aucun changement de comportement sur un hebergement mutualise
+	// classique -- a activer seulement si on sait que le pool de workers
+	// PHP-FPM/mod_php de l'hebergement peut tenir la charge (voir le detail
+	// des compromis dans l'analyse).
+	if (!empty($enableLongPolling)) {
+		echo("<script>var LONG_POLL_ENABLED = true;</script>\n");
+	}
+	// Notification "push" optionnelle (VPS avec Node qui tourne à côté --
+	// voir push/README.md ; absente par défaut, donc aucun changement de
+	// comportement sur un hébergement mutualisé classique qui n'a pas cette
+	// variable dans localconf.php). Ne fait QUE déclencher un reload
+	// immédiat en plus du polling existant, jamais à sa place.
+	if (!empty($pushWsUrl)) {
+		echo("<script>var PUSH_WS_URL = ".json_encode($pushWsUrl).";</script>\n");
+		echo("<script src=\"js/push-client.js\"></script>\n");
+	}
+	?>
 </body>
 
 </html>
