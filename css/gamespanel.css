@@ -1,0 +1,128 @@
+@font-face {
+    font-family: 'Ubuntu';
+    font-style: normal;
+    font-weight: 400;
+    src: url(./../font/Ubuntu-Regular.ttf) format('truetype');
+}
+
+html{
+    font-family: 'Ubuntu', sans-serif;
+    background: black;
+}
+.game-thumb {
+    float: left;
+    padding : 5px;
+    background : black;
+    margin : 0;
+    width: 85px;
+    height : 85px;
+}
+.game-thumb > img {
+    width: 85px;
+    height : 85px;
+}
+#game-details{
+    background : lightgrey;
+    padding : 20px;
+    text-align: center ;
+}
+.selected-game{
+    background:chartreuse;
+}
+#gd-game-name{
+    font-size: large;
+}
+#gd-game-abstract{
+    font-size: small;
+}
+.gd-button{
+    display: inline-block ;
+    margin-right : 10px;
+    margin-top : 10px;
+    padding: 10px;
+    background : #888888;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#jocly-github{
+    padding : 6px;
+}
+#jocly-github > a{
+    text-decoration: none;
+    font-size: small;
+}
+
+#match-area{
+    font-size: 12px;
+    display: none;
+}
+input[type=text] {
+    font-size: 12px;
+    padding : 3px;
+    border: 1px solid #aaaaaa;
+    border-radius: 5px;;
+}
+
+#rules-container{
+    height : 10px;
+    background : white;
+    transition: all .3s;
+    overflow : auto;
+}
+#rules{
+    width: 500px;
+    max-width: 100%;
+    margin: auto ;
+
+}
+.close-rules-button {
+    text-align: right;
+    padding : 5px;
+}
+.close-rules-button a{
+    text-decoration: none ;
+    padding : 3px;
+    background-color: cornflowerblue;
+    border-radius: 5px;
+    font : small ;
+    color : white;
+    padding: 3px 10px;
+}
+#module-info{
+    font-size: 10px;
+}
+.page-link{
+    font-size: 10px;
+}
+.button-svg-pic{
+    height : 17px;
+    width: auto ;
+    vertical-align: sub ;
+}
+
+#warning-div{
+    background: orange ;
+    color : white ;
+    font-size : small;
+    padding : 5px ; 
+}
+.gd-game-icon-img{
+    width : 60px;
+    height : auto ;
+    border-radius : 50%;
+    border : 3px solid white;
+}
+#lg-flag{
+    float: right;
+    cursor: pointer;
+}
+#flagicon{
+    width : 16px;
+    height : auto ;
+}
+#games-panel {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+

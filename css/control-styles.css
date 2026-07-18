@@ -1,0 +1,292 @@
+@font-face {
+    font-family: 'Ubuntu';
+    font-style: normal;
+    font-weight: 400;
+    src: url(./../font/Ubuntu-Regular.ttf) format('truetype');
+}
+
+* {
+	box-sizing: border-box;
+}
+html,body {
+    height: 100%;
+    margin: 0;
+    font-family: 'Ubuntu', sans-serif;
+}
+#container {
+	width: 100%;
+    height: 100%;
+	display: table;
+	table-layout: fixed;
+}
+#applet {
+	display: table-cell;
+    height: 100%;
+    width: 100%;
+    position: relative;
+}
+#overhead-menu{
+    font-size: small;
+    position: absolute;
+    left : 0;
+    bottom: 0;
+    width : 100%;
+    background: black;
+    color: grey;
+    text-align: center;
+}
+#overhead-menu a {
+    text-decoration: none;
+    color : white;
+}
+#rulestab , #chattab{
+    display: table-cell;
+    padding : 5px 15px;
+    background: white;
+    position : absolute ;
+    width : 500px;
+    height : 100%;
+    overflow-y: auto;
+    left : 0;
+    transition: all 0.3s;
+}
+
+/* chat */
+#chattab{
+    width : 250px;
+    background-color: rgba(220,220,220,1);
+    padding : 0 ;
+}
+#panel-chat{
+    position : relative;
+    height: 100%;
+}
+#chat-input{
+    height: 60px;
+    position: absolute;
+    bottom: 30px;
+    width: 100%;
+}
+#chat-input-field{
+    width : 90%;
+    margin-left: 5%;
+    resize: none;
+    font-family: inherit;
+    font-size : 11px;
+}
+#pseudo-div{
+    font-size: 12px;
+    text-align: right;
+}
+#pseudo-div input{
+    font-size: inherit;
+    width: 50%;
+    margin-right: 5%;
+}
+#prev-msgs {
+    display: inline-block;
+    width: 100%;
+    border-bottom: 3px solid white;
+}
+#bottom-container{
+    overflow: auto;
+    height: 100%;
+    width:100%;
+    font-size: 12px;
+    line-height: 22px;
+}
+.cm-player-a , .cm-player-b , .cm-system {
+    border-radius : 5px;
+    margin : 3px 0;
+    padding: 3px 12px;
+    width : 90%;
+}
+.cm-player-a {
+    background-color: rgba(220,255,220,1);
+    border-radius : 0 5px 5px 0;
+}
+.cm-player-b {
+    background-color: rgba(255,255,255,1);
+    margin-left : 10%;
+    border-radius : 5px 0 0 5px;
+}
+.cm-system{
+    background-color: rgba(255,255,255,1);
+    margin : 10px 0;
+    border-radius : 0px;
+    width : 100%; 
+    border-left: 6px solid orange;
+}
+.cm-author{
+    font-weight : bold;
+    font-size : 12px;
+    color : orangered;
+}
+.cm-time{
+    color : grey;
+    font-size : 10px;
+    display: inline-block ;
+    float: right;
+}
+.new-messages{
+    background-color: orangered;
+    border-radius: 3px;
+}
+
+.cm-system > .cm-author {
+    color: gray;
+    font-weight: normal;
+}
+.cm-system > .cm-text {
+    text-align: center;
+}
+.winner-message{
+    font-size: 2em;
+    border-bottom: 1px solid gray;
+    line-height: 2em;
+}
+
+#controls {
+	display: table-cell;
+	width: 300px;
+	vertical-align: top;
+    padding: 0 .5em 0 .5em;
+    position: absolute;
+    left: 0;
+    transition: all 0.3s;
+    font-size: .8rem;
+}
+#controls h3 {
+    margin: .0 0 .5em 0;
+}
+#controls button {
+    margin: .25em;
+}
+#panel-control{
+    margin: 1em 0;
+}
+.ctrl-panel-button , .rules-panel-button{
+    text-decoration: none;
+    background: rgba(255,255,255,.5);
+    inline-size: max-content;
+    padding: 3px;
+    border-radius: 3px;
+}
+.ctrl-panel-open , .rules-panel-open{
+    position: absolute;
+    left: 300px;
+}
+.rules-panel-open {
+    right : 0 ;
+}
+#close-rules {
+    text-align: right;
+}
+
+
+#controls label select {
+    margin-left: 1em;
+}
+.box {
+	background-color: #f0f0f0;
+	border: 2px solid #e0e0e0;
+	border-radius: 0;
+	padding: 1em;
+    margin: 5px 0 5px 0;
+}
+#progress-bar {
+    height: 5px;
+    background-color: rgba(0,255,0,.3);
+    transition: width .5s;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    display: none;
+}
+#game-title {
+	background-color: #0f0f0f;
+    color: #fff;
+    font-weight: bold;
+    text-align: center;
+}
+#game-status {
+}
+#links {
+    text-align: center;
+}
+#games {
+	display: table-cell;
+	width: 300px;
+	vertical-align: top;
+	padding: 0;
+}
+#games > div {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+#games > div > div {
+    overflow-y: auto;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+#close-games {
+    text-align: right;
+    border-bottom: 1px solid #eee;
+}
+#close-games span {
+    font-size: 16pt;
+    padding: 6px;
+    cursor: pointer;
+}
+#game-list {
+    width: 100%;
+    margin: 0px;
+    padding: 8px;
+}
+
+.game-descr {
+    background-repeat: no-repeat;
+    background-position: left center;
+    background-size: 32px;
+    cursor: pointer;
+    padding: 4px 4px 4px 40px;
+}
+
+.game-descr:hover {
+    background-color: #eee;
+}
+
+.game-descr-name {
+    font-weight: bold;
+}
+#lg-flag{
+    float: right;
+    cursor: pointer;
+}
+#flagicon{
+    width : 16px;
+    height : auto ;
+}
+.game-status-base{
+    background-color: rgba(255,255,255,.5);
+}
+.iamPlaying {
+    background-color: greenyellow;
+}
+#game-status {
+    position: absolute;
+    z-index: 99999;
+    height: 20px;
+    min-width: 100px;
+    left: 50%;
+    margin-left: -50px;
+    text-align: center;
+    padding: 0px 5px 5px 5px;
+    font-size: 14px;
+    border-radius: 0 0px 5px 5px;
+}
