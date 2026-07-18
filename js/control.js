@@ -372,7 +372,15 @@ function loadMatchFromID(gameid,match){
         },
         function(json){
         // the output of the response is now handled via a variable call 'results'
-            var data = JSON.parse(json);
+            // Rien a charger pour l'instant (ex. l'autre joueur n'a pas
+            // encore fait son premier coup, le match n'existe pas encore
+            // cote serveur) : json est vide, ou son contenu n'a pas la forme
+            // attendue -- on ignore silencieusement plutot que de planter,
+            // le prochain sondage reessaiera.
+            var data;
+            try { data = JSON.parse(json); }
+            catch (e) { console.log("loadMatchFromID: reponse non-JSON ignoree", e); return; }
+            if (!data || !data.matchDetails || !data.matchdata) { return; }
 
             if (matchDetails.nbTurns != data.matchDetails.nbTurns){
                 matchDetails.nbTurns = data.matchDetails.nbTurns;
@@ -475,8 +483,12 @@ $(document).ready(function () {
     
     Jocly.getGameConfig(gameName).then((p)=>{
         gameFullPath = p.view.fullPath ;
-        var rulesPath = p.view.fullPath+"/"+p.model.rules.en ;
-        console.log(rulesPath);
+        var rulesPath;
+        if (lg == "fr" && p.model.rules.fr){
+            rulesPath = p.view.fullPath+"/"+p.model.rules.fr ; 
+        }else if (p.model.rules.en){
+            rulesPath = p.view.fullPath+"/"+p.model.rules.en ; 
+        }
         loadRules(rulesPath,p.view.fullPath);
     })
 
@@ -749,7 +761,7 @@ $(document).ready(function () {
             });
     });
 
-    // save enlglish original texts
+    // save english original texts
     $(".t").each(function(){
         $(this).attr("en-txt",this.innerText);
     });
