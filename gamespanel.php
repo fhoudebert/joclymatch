@@ -23,7 +23,7 @@
 
 
 <body>
-    <div id="warning-div"><span class='t'>This is an experiment, for more info, please</span> <a href="doc/html/readthis.html"><span class='t'>read this</span></a></div>
+    <div id="info-div"><a id="info-link" href="doc/html/readthis.html">&#9432; <span class='t'>About this site</span></a></div>
     <div id="game-details">
         <div id="lg-flag"><img id="flagicon" src="i/flags/en.svg"></div>
         <div id="gd-game-icon"><img class="gd-game-icon-img" src="i/jocly-logo.png"></div>

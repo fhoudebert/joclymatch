@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>JoclyMatch - Jocly Game Server</title>
+  <title>JoclyMatch - Serveur de jeux Jocly</title>
 
-  <meta name="description" content="JoclyMatch allows you to install a small game server to play Jocly games between users, without database or tracking.">
+  <meta name="description" content="JoclyMatch permet d'installer un petit serveur de jeu pour jouer aux jeux Jocly entre utilisateurs, sans base de données ni suivi.">
 
   <meta name="author" content="François Houdebert">
 
@@ -64,29 +64,28 @@
 <div class="page">
 
   <nav class="topbar">
-    <a class="back" href="../../gamespanel.php">&larr; Back to games</a>
-    <a class="lang" href="readthis_fr.html" hreflang="fr" lang="fr">Français</a>
+    <a class="back" href="../../gamespanel.php">&larr; Retour aux jeux</a>
+    <a class="lang" href="readthis.html" hreflang="en" lang="en">English</a>
   </nav>
 
   <header class="head">
-    <img src="../../i/jocly-logo.png" alt="Jocly logo">
+    <img src="../../i/jocly-logo.png" alt="Logo Jocly">
     <div>
       <h1>JoclyMatch</h1>
-      <p class="subtitle">A small game server to play Jocly games, without database or tracking.</p>
+      <p class="subtitle">Un petit serveur de jeu pour jouer aux jeux Jocly, sans base de données ni suivi.</p>
     </div>
   </header>
 
   <div class="board-rule" role="presentation"></div>
 
   <p>
-  This site is originally based on an experiment by Jérôme Choain, also known as
-  <a href="https://github.com/jcfrog">@jcfrog</a>, allowing users to play Jocly games
-  against each other in order to compensate for the shutdown of the <strong>jocly.com</strong>
-  server.
+  Ce site est basé à l'origine sur une expérimentation de Jérôme Choain, alias
+  <a href="https://github.com/jcfrog">@jcfrog</a>, permettant aux utilisateurs de jouer
+  aux jeux Jocly entre eux afin de pallier l'arrêt du serveur <strong>jocly.com</strong>.
   </p>
 
   <p>
-  The original version has been extended, and the source code is available on GitHub:
+  La version d'origine a été complétée et les sources sont disponibles sur GitHub :
   </p>
 
   <p>
@@ -96,13 +95,13 @@
   </p>
 
   <p>
-  <a href="https://github.com/fhoudebert/jocly2">Jocly</a> is an open-source board game
-  library created by Michel Gutierrez. More than a hundred games are available.
+  <a href="https://github.com/fhoudebert/jocly2">Jocly</a> est une bibliothèque open source
+  de jeux de plateau créée par Michel Gutierrez. Plus d'une centaine de jeux sont disponibles.
   </p>
 
   <p>
-  Development has been restarted with contributions from HG Muller and François Houdebert.
-  The source code is available here:
+  Les développements ont été relancés avec des contributions de HG Muller et François Houdebert.
+  Les sources sont disponibles ici :
   </p>
 
   <p>
@@ -112,60 +111,58 @@
   </p>
 
   <p>
-  With <strong>joclymatch</strong>, you should be able to install this small game server
-  anywhere.
+  Avec <strong>joclymatch</strong>, vous devriez pouvoir installer ce petit serveur de jeu
+  n'importe où.
   </p>
 
   <p>
-  You can decide whether the following points are advantages or disadvantages:
+  À vous de décider ce qui constitue un avantage ou un inconvénient :
   </p>
 
   <ul>
     <li>
-      no database: all you need is a web server with PHP.
-      Games are stored as simple readable text files (JSON);
+      pas de base de données : il suffit d'un serveur web avec PHP.
+      Les parties sont stockées dans de simples fichiers texte lisibles (JSON) ;
     </li>
 
     <li>
-      no login, no password (this may change in the future).
-      Absolutely no personal data is stored, only the moves played during games;
+      pas de connexion, pas de mot de passe (cela pourra évoluer).
+      Aucune donnée personnelle n'est stockée, uniquement les coups joués ;
     </li>
 
     <li>
-      no advertising, no tracking;
+      pas de publicité, pas de suivi ;
     </li>
 
     <li>
-      a very basic interface that simply allows you to:
+      une interface très basique permettant simplement de :
       <ul>
-        <li>play alone against the computer;</li>
-
+        <li>jouer seul contre l'ordinateur ;</li>
         <li>
-          create a game: you will then need to send a link to your opponent;
+          créer une partie : vous devrez ensuite envoyer un lien à votre adversaire ;
         </li>
-
         <li>
-          work with a classic periodic polling system.
+          fonctionner avec un système de consultation périodique classique (<em>polling</em>).
         </li>
       </ul>
     </li>
   </ul>
 
   <p>
-  You can cheat: anyone with the correct link can play either side (A or B).
+  Vous pouvez tricher : toute personne disposant du bon lien peut jouer du côté A ou du côté B.
   </p>
 
   <p>
-  But we are gentlemen, aren't we?
+  Mais nous sommes des gentlemen, n'est-ce pas ?
   </p>
 
   <p>
-  It is also possible to use the <em>push</em> version instead of <em>polling</em>,
-  if you have a VPS running a Node.js server.
+  Il est également possible d'utiliser la version <em>push</em> à la place du <em>polling</em>,
+  si vous disposez d'un VPS avec un serveur Node.js.
   </p>
 
   <footer>
-    <a class="back" href="../../gamespanel.php">&larr; Back to games</a>
+    <a class="back" href="../../gamespanel.php">&larr; Retour aux jeux</a>
   </footer>
 
 </div>
