@@ -26,9 +26,9 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
     $fn = fileName($_POST['gameid']);
     
     if($_POST['gameioaction']=='save' && isset($_POST['gamedata'])){       
-        echo("gameaction : ".$_POST['gameioaction']);
-        echo("gameid : ".$_POST['gameid']);
-        echo("data : ".$_POST['gamedata']);
+        // (echos de debug retires : les clients ignorent le corps de la
+        // reponse de save, et renvoyer les donnees POST telles quelles
+        // n'apportait rien)
         // Ecriture atomique (fichier temporaire puis rename()) : evite qu'un
         // load() concurrent ne lise un fichier a moitie ecrit.
         $tmp = $fn.".tmp".uniqid();
@@ -80,9 +80,6 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
     $fn = chatfileName($_POST['gameid']);
     
     if($_POST['chatioaction']=='save' && isset($_POST['chatmsg'])){       
-        echo("chataction : ".$_POST['chatioaction']);
-        echo("gameid : ".$_POST['gameid']);
-        echo("data : ".$_POST['chatmsg']);
         $fp = fopen($fn,"at");
         fputs($fp,$_POST['chatmsg']."\n");
         fclose($fp);
