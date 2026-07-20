@@ -213,17 +213,26 @@ class ChatMsg{
         var pn = (this.data.pseudo.length > 0)?this.data.pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
         var d = new Date(this.data.time);
         var id = this.getId();
-        
+        // Le contenu du message et le pseudo viennent de l'AUTRE joueur via
+        // le fichier de chat partage : sans echappement, un adversaire peut
+        // executer du script chez nous (XSS stocke) en tapant du HTML dans le
+        // chat ou comme pseudo. On echappe donc tout contenu utilisateur.
+        // Les messages systeme (player == 0) sont generes localement par le
+        // code (informUserInChatroom / NotifyWinner) et contiennent des liens
+        // HTML voulus : eux seuls restent inseres tels quels, comme avant.
+        var body = escapeHtml(this.data.msg);
+
         // system msgs
         if (this.data.player == 0){
             cn = "cm-system";
             pn = t("System message");
+            body = this.data.msg;
         }
 
-        return "<div id='"+id+"' class='cm-container "+cn+"'>\
+        return "<div id='"+escapeHtml(id)+"' class='cm-container "+cn+"'>\
             <div class='cm-time'>"+d.toLocaleString()+"</div>\
-            <div class='cm-author'>"+pn+"</div>\
-            <div class='cm-text'>"+this.data.msg+"</div>\
+            <div class='cm-author'>"+escapeHtml(pn)+"</div>\
+            <div class='cm-text'>"+body+"</div>\
         </div>" ;
     }
 }

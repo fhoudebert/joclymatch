@@ -31,3 +31,12 @@ function incId(id){
     console.log("id  after",id);
     return id;
 }
+
+// Echappe les 5 caracteres speciaux HTML. Utilise par ChatMsg.html()
+// (js/control.js) pour neutraliser le contenu ecrit par l'autre joueur
+// (message et pseudo) avant insertion dans le DOM.
+function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+}
