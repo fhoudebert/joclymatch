@@ -417,7 +417,20 @@ function loadMatchFromID(gameid,match,waitMode){
             // le prochain sondage reessaiera.
             var data;
             try { data = JSON.parse(json); }
-            catch (e) { console.log("loadMatchFromID: reponse non-JSON ignoree", e); return; }
+            catch (e) {
+                // Serveur dont localconf.php (ou une notice PHP) ecrit du
+                // texte AVANT le JSON : on retente a partir de la premiere
+                // accolade plutot que de jeter un vrai etat de partie.
+                var start = (typeof json === 'string') ? json.indexOf('{') : -1;
+                if (start > 0) {
+                    try { data = JSON.parse(json.slice(start)); }
+                    catch (e2) { console.log("loadMatchFromID: reponse non-JSON ignoree", e2); return; }
+                } else {
+                    if (json && String(json).trim().length)
+                        console.log("loadMatchFromID: reponse non-JSON ignoree", e);
+                    return;
+                }
+            }
             if (!data || !data.matchDetails || !data.matchdata) { return; }
 
             if (matchDetails.nbTurns != data.matchDetails.nbTurns){

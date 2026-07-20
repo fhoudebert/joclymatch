@@ -1,5 +1,14 @@
 <?php
+// fileio.php repond du JSON brut : le moindre octet parasite emis avant
+// (BOM, espace ou ligne vide apres le ?> de localconf.php, notice PHP
+// affichee...) se retrouve DEVANT le JSON et fait echouer JSON.parse()
+// cote client ("unexpected end of data" si le corps etait vide,
+// "unexpected character" sinon). On charge donc localconf.php sous
+// tampon et on jette tout ce qu'il aurait pu ecrire : un localconf sain
+// n'ecrit rien, donc aucun changement pour lui.
+ob_start();
 require "localconf.php";
+ob_end_clean();
 
 // gameid sert a construire un nom de fichier (fileName/chatfileName) : on le
 // valide avant tout usage pour empecher une traversee de repertoire
@@ -68,7 +77,13 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
             header('X-File-Mtime: ' . filemtime($fn));
             echo(file_get_contents($fn));
         } else {
+            header('Content-Type: application/json');
             header('X-File-Mtime: 0');
+            // Toujours du JSON valide, meme sans match : le client teste
+            // deja data.matchDetails/data.matchdata avant usage, donc {}
+            // est ignore comme l'etait le corps vide -- mais sans passer
+            // par l'exception JSON.parse (console propre).
+            echo("{}");
         }
     }
 }
