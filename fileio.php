@@ -1,5 +1,14 @@
 <?php
+// fileio.php repond du JSON brut : le moindre octet parasite emis avant
+// (BOM, espace ou ligne vide apres la balise fermante de localconf.php, notice PHP
+// affichee...) se retrouve DEVANT le JSON et fait echouer JSON.parse()
+// cote client ("unexpected end of data" si le corps etait vide,
+// "unexpected character" sinon). On charge donc localconf.php sous
+// tampon et on jette tout ce qu'il aurait pu ecrire : un localconf sain
+// n'ecrit rien, donc aucun changement pour lui.
+ob_start();
 require "localconf.php";
+ob_end_clean();
 
 // gameid sert a construire un nom de fichier (fileName/chatfileName) : on le
 // valide avant tout usage pour empecher une traversee de repertoire
@@ -26,13 +35,27 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
     $fn = fileName($_POST['gameid']);
     
     if($_POST['gameioaction']=='save' && isset($_POST['gamedata'])){       
-        echo("gameaction : ".$_POST['gameioaction']);
-        echo("gameid : ".$_POST['gameid']);
-        echo("data : ".$_POST['gamedata']);
+        // (echos de debug retires : les clients ignorent le corps de la
+        // reponse de save, et renvoyer les donnees POST telles quelles
+        // n'apportait rien)
         // Ecriture atomique (fichier temporaire puis rename()) : evite qu'un
         // load() concurrent ne lise un fichier a moitie ecrit.
+        // Le repertoire de sauvegarde ($savePath, ex. "saves/") ne fait pas
+        // partie du depot : sur un deploiement neuf il n'existe pas, et
+        // fopen() echouait alors ("No such file or directory") suivi d'un
+        // fatal error fputs(false, ...) -- la partie n'etait jamais ecrite.
+        $dir = dirname($fn);
+        if ($dir !== '' && $dir !== '.' && !is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
         $tmp = $fn.".tmp".uniqid();
-        $fp = fopen($tmp,"wt");
+        $fp = @fopen($tmp,"wt");
+        if ($fp === false) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "cannot write save file"));
+            exit;
+        }
         fputs($fp,$_POST['gamedata']);
         fclose($fp);
         rename($tmp,$fn);
@@ -68,7 +91,13 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
             header('X-File-Mtime: ' . filemtime($fn));
             echo(file_get_contents($fn));
         } else {
+            header('Content-Type: application/json');
             header('X-File-Mtime: 0');
+            // Toujours du JSON valide, meme sans match : le client teste
+            // deja data.matchDetails/data.matchdata avant usage, donc {}
+            // est ignore comme l'etait le corps vide -- mais sans passer
+            // par l'exception JSON.parse (console propre).
+            echo("{}");
         }
     }
 }
@@ -80,13 +109,21 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
     $fn = chatfileName($_POST['gameid']);
     
     if($_POST['chatioaction']=='save' && isset($_POST['chatmsg'])){       
-        echo("chataction : ".$_POST['chatioaction']);
-        echo("gameid : ".$_POST['gameid']);
-        echo("data : ".$_POST['chatmsg']);
-        $fp = fopen($fn,"at");
-        fputs($fp,$_POST['chatmsg']."\n");
-        fclose($fp);
-        echo("chat saved : ok");
+        // Meme protection que pour la sauvegarde de partie : creer le
+        // repertoire s'il manque et ne pas ecrire sur un handle invalide.
+        $dir = dirname($fn);
+        if ($dir !== '' && $dir !== '.' && !is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $fp = @fopen($fn,"at");
+        if ($fp === false) {
+            http_response_code(500);
+            echo("chat save failed");
+        } else {
+            fputs($fp,$_POST['chatmsg']."\n");
+            fclose($fp);
+            echo("chat saved : ok");
+        }
     }
     if(($_POST['chatioaction']=='load')){
         header('Content-Type: application/json');

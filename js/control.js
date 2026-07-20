@@ -213,17 +213,26 @@ class ChatMsg{
         var pn = (this.data.pseudo.length > 0)?this.data.pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
         var d = new Date(this.data.time);
         var id = this.getId();
-        
+        // Le contenu du message et le pseudo viennent de l'AUTRE joueur via
+        // le fichier de chat partage : sans echappement, un adversaire peut
+        // executer du script chez nous (XSS stocke) en tapant du HTML dans le
+        // chat ou comme pseudo. On echappe donc tout contenu utilisateur.
+        // Les messages systeme (player == 0) sont generes localement par le
+        // code (informUserInChatroom / NotifyWinner) et contiennent des liens
+        // HTML voulus : eux seuls restent inseres tels quels, comme avant.
+        var body = escapeHtml(this.data.msg);
+
         // system msgs
         if (this.data.player == 0){
             cn = "cm-system";
             pn = t("System message");
+            body = this.data.msg;
         }
 
-        return "<div id='"+id+"' class='cm-container "+cn+"'>\
+        return "<div id='"+escapeHtml(id)+"' class='cm-container "+cn+"'>\
             <div class='cm-time'>"+d.toLocaleString()+"</div>\
-            <div class='cm-author'>"+pn+"</div>\
-            <div class='cm-text'>"+this.data.msg+"</div>\
+            <div class='cm-author'>"+escapeHtml(pn)+"</div>\
+            <div class='cm-text'>"+body+"</div>\
         </div>" ;
     }
 }
@@ -263,9 +272,13 @@ class ChatData{
                     gameid:matchDetails.matchId
                 },
                 function(json){
-                    // the output of the response is now handled via a variable call 'results'
-                    var data = JSON.parse(json);
-                    if (data.messages != undefined){
+                    // fileio.php repond desormais avec l'en-tete
+                    // Content-Type: application/json : jQuery a alors DEJA
+                    // parse la reponse et nous passe un objet, pas une
+                    // chaine. JSON.parse(objet) donnerait
+                    // '"[object Object]" is not valid JSON'.
+                    var data = (typeof json === 'string') ? JSON.parse(json) : json;
+                    if (data && data.messages != undefined){
                         // reset 
                         this.msgs = [] ; 
                         var nbAdded = 0 ;                           
@@ -407,8 +420,23 @@ function loadMatchFromID(gameid,match,waitMode){
             // attendue -- on ignore silencieusement plutot que de planter,
             // le prochain sondage reessaiera.
             var data;
-            try { data = JSON.parse(json); }
-            catch (e) { console.log("loadMatchFromID: reponse non-JSON ignoree", e); return; }
+            // Comme fileio.php envoie Content-Type: application/json,
+            // jQuery parse deja la reponse : json est alors un objet.
+            try { data = (typeof json === 'string') ? JSON.parse(json) : json; }
+            catch (e) {
+                // Serveur dont localconf.php (ou une notice PHP) ecrit du
+                // texte AVANT le JSON : on retente a partir de la premiere
+                // accolade plutot que de jeter un vrai etat de partie.
+                var start = (typeof json === 'string') ? json.indexOf('{') : -1;
+                if (start > 0) {
+                    try { data = JSON.parse(json.slice(start)); }
+                    catch (e2) { console.log("loadMatchFromID: reponse non-JSON ignoree", e2); return; }
+                } else {
+                    if (json && String(json).trim().length)
+                        console.log("loadMatchFromID: reponse non-JSON ignoree", e);
+                    return;
+                }
+            }
             if (!data || !data.matchDetails || !data.matchdata) { return; }
 
             if (matchDetails.nbTurns != data.matchDetails.nbTurns){
