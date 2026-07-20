@@ -47,7 +47,7 @@
 
     <?php require "localconf.php" ?>
     <script src="<?php echo($joclyDistPath);?>"></script>
-    <script src="js/jquery-3.2.1.min.js"></script>
+    <script src="js/jquery-3.7.1.min.js"></script>
     <script>
     var selectedGame = "";
     var selectedModule = "";
