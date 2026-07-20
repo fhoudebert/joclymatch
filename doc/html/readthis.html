@@ -10,10 +10,73 @@
 
   <meta name="author" content="François Houdebert">
 
-  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="icon" type="image/png" href="../../i/favicons/normal/favicon-32x32.png">
+
+  <style>
+    :root{
+      --accent:#b36b00;
+      --square:#f3ede3;
+      --ink:#2b2b2b;
+      --soft:#6b6b6b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:#ffffff;
+      color:var(--ink);
+      font:16px/1.65 "Helvetica Neue",Helvetica,Arial,sans-serif;
+    }
+    .page{max-width:42rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+    .topbar{
+      display:flex;align-items:center;justify-content:space-between;
+      font-size:.85rem;margin-bottom:1.75rem;
+    }
+    .back{color:var(--accent);text-decoration:none;font-weight:600}
+    .back:hover{text-decoration:underline}
+    .lang{
+      color:var(--soft);text-decoration:none;
+      border:1px solid #ddd;border-radius:999px;padding:.2rem .7rem;
+    }
+    .lang:hover{border-color:var(--accent);color:var(--accent)}
+    header.head{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+    header.head img{width:52px;height:52px;border-radius:50%;border:3px solid var(--square)}
+    h1{font-family:Georgia,"Times New Roman",serif;font-size:1.8rem;line-height:1.2;margin:0}
+    .subtitle{color:var(--soft);margin:.2rem 0 0;font-size:.95rem}
+    /* clin d'oeil aux plateaux de jeu : filet en damier */
+    .board-rule{
+      height:10px;margin:1.4rem 0 1.8rem;border-radius:2px;opacity:.85;
+      background:repeating-linear-gradient(90deg,var(--accent) 0 10px,var(--square) 10px 20px);
+    }
+    p{margin:.7rem 0}
+    ul{padding-left:1.3rem}
+    li{margin:.35rem 0}
+    a{color:var(--accent)}
+    a.url{word-break:break-all}
+    strong{color:#000}
+    footer{
+      margin-top:3rem;padding-top:1.25rem;border-top:1px solid #eee;
+      font-size:.85rem;color:var(--soft);
+    }
+  </style>
 </head>
 
 <body>
+<div class="page">
+
+  <nav class="topbar">
+    <a class="back" href="../../gamespanel.php">&larr; Back to games</a>
+    <a class="lang" href="readthis_fr.html" hreflang="fr" lang="fr">Français</a>
+  </nav>
+
+  <header class="head">
+    <img src="../../i/jocly-logo.png" alt="Jocly logo">
+    <div>
+      <h1>JoclyMatch</h1>
+      <p class="subtitle">A small game server to play Jocly games, without database or tracking.</p>
+    </div>
+  </header>
+
+  <div class="board-rule" role="presentation"></div>
 
   <p>
   This site is originally based on an experiment by Jérôme Choain, also known as
@@ -27,7 +90,7 @@
   </p>
 
   <p>
-  <a href="https://github.com/fhoudebert/joclymatch">
+  <a class="url" href="https://github.com/fhoudebert/joclymatch">
   https://github.com/fhoudebert/joclymatch
   </a>
   </p>
@@ -43,7 +106,7 @@
   </p>
 
   <p>
-  <a href="https://github.com/fhoudebert/jocly2">
+  <a class="url" href="https://github.com/fhoudebert/jocly2">
   https://github.com/fhoudebert/jocly2
   </a>
   </p>
@@ -101,5 +164,10 @@
   if you have a VPS running a Node.js server.
   </p>
 
+  <footer>
+    <a class="back" href="../../gamespanel.php">&larr; Back to games</a>
+  </footer>
+
+</div>
 </body>
 </html>

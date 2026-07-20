@@ -191,6 +191,9 @@ function setLanguage(newlg){
         $(".t").each(function(){
             this.innerText = t($(this).attr("en-txt"));
         });
+        // La notice existe en deux langues : on suit la locale active.
+        $("#info-link").attr("href",
+            lg=="fr" ? "doc/html/readthis_fr.html" : "doc/html/readthis.html");
     }
 }
 
@@ -220,8 +223,7 @@ var translations = {
     "Copy" : {fr : "Copier"},
     "Open" : {fr : "Ouvrir"},
     "Jocly on Github" : {fr : "Jocly sur Github"},
-    "This is an experiment, for more info, please" : {fr: "Ceci est une expérimentation, merci de"},
-    "read this" : {fr: "lire ceci"},
+    "About this site" : {fr: "À propos de ce site"},
     "Please select a game first" : {fr : "Merci de sélectionner un jeu"}
 }
 

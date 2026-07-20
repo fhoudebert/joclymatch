@@ -101,11 +101,17 @@ input[type=text] {
     vertical-align: sub ;
 }
 
-#warning-div{
-    background: orange ;
-    color : white ;
+#info-div{
+    text-align : right ;
     font-size : small;
-    padding : 5px ; 
+    padding : 5px 10px ;
+}
+#info-div a{
+    color : #b36b00 ;
+    text-decoration : none ;
+}
+#info-div a:hover{
+    text-decoration : underline ;
 }
 .gd-game-icon-img{
     width : 60px;
