@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>JoclyMatch - Serveur de jeux Jocly</title>
+
+  <meta name="description" content="JoclyMatch permet d'installer un petit serveur de jeu pour jouer aux jeux Jocly entre utilisateurs, sans base de données ni suivi.">
+
+  <meta name="author" content="François Houdebert">
+
+  <link rel="icon" type="image/png" href="favicon.png">
+</head>
+
+<body>
+
+  <p>
+  Ce site est basé à l'origine sur une expérimentation de Jérôme Choain, alias
+  <a href="https://github.com/jcfrog">@jcfrog</a>, permettant aux utilisateurs de jouer
+  aux jeux Jocly entre eux afin de pallier l'arrêt du serveur <strong>jocly.com</strong>.
+  </p>
+
+  <p>
+  La version d'origine a été complétée et les sources sont disponibles sur GitHub :
+  </p>
+
+  <p>
+  <a href="https://github.com/fhoudebert/joclymatch">
+  https://github.com/fhoudebert/joclymatch
+  </a>
+  </p>
+
+  <p>
+  <a href="https://github.com/fhoudebert/jocly2">Jocly</a> est une bibliothèque open source
+  de jeux de plateau créée par Michel Gutierrez. Plus d'une centaine de jeux sont disponibles.
+  </p>
+
+  <p>
+  Les développements ont été relancés avec des contributions de HG Muller et François Houdebert.
+  Les sources sont disponibles ici :
+  </p>
+
+  <p>
+  <a href="https://github.com/fhoudebert/jocly2">
+  https://github.com/fhoudebert/jocly2
+  </a>
+  </p>
+
+  <p>
+  Avec <strong>joclymatch</strong>, vous devriez pouvoir installer ce petit serveur de jeu
+  n'importe où.
+  </p>
+
+  <p>
+  À vous de décider ce qui constitue un avantage ou un inconvénient :
+  </p>
+
+  <ul>
+    <li>
+      pas de base de données : il suffit d'un serveur web avec PHP.
+      Les parties sont stockées dans de simples fichiers texte lisibles (JSON) ;
+    </li>
+
+    <li>
+      pas de connexion, pas de mot de passe (cela pourra évoluer).
+      Aucune donnée personnelle n'est stockée, uniquement les coups joués ;
+    </li>
+
+    <li>
+      pas de publicité, pas de suivi ;
+    </li>
+
+    <li>
+      une interface très basique permettant simplement de :
+      <ul>
+        <li>jouer seul contre l'ordinateur ;</li>
+        <li>
+          créer une partie : vous devrez ensuite envoyer un lien à votre adversaire ;
+        </li>
+        <li>
+          fonctionner avec un système de consultation périodique classique (<em>polling</em>).
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <p>
+  Vous pouvez tricher : toute personne disposant du bon lien peut jouer du côté A ou du côté B.
+  </p>
+
+  <p>
+  Mais nous sommes des gentlemen, n'est-ce pas ?
+  </p>
+
+  <p>
+  Il est également possible d'utiliser la version <em>push</em> à la place du <em>polling</em>,
+  si vous disposez d'un VPS avec un serveur Node.js.
+  </p>
+
+</body>
+</html>
