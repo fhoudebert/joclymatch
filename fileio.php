@@ -1,6 +1,6 @@
 <?php
 // fileio.php repond du JSON brut : le moindre octet parasite emis avant
-// (BOM, espace ou ligne vide apres le ?> de localconf.php, notice PHP
+// (BOM, espace ou ligne vide apres la balise fermante de localconf.php, notice PHP
 // affichee...) se retrouve DEVANT le JSON et fait echouer JSON.parse()
 // cote client ("unexpected end of data" si le corps etait vide,
 // "unexpected character" sinon). On charge donc localconf.php sous
