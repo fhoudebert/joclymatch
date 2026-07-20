@@ -55,13 +55,19 @@
     var playerURL="<?php echo $joclyPlayerURL; ?>";
     var matchRootURL="<?php echo $joclyMatchURL; ?>"
     <?php
-        if (isset($_GET["game"])){
+        // Meme protection que dans index.php : ces valeurs sont echos dans
+        // du JS inline, on n'accepte que [A-Za-z0-9_-] (ce que sont deja
+        // tous les noms de jeux/modules Jocly et codes langue legitimes).
+        function safeParam($name){
+            return isset($_GET[$name]) && preg_match('/^[A-Za-z0-9_-]+$/', $_GET[$name]);
+        }
+        if (safeParam("game")){
             echo("selectedGame = \"".$_GET["game"]."\";");
         }        
-        if (isset($_GET["module"])){
+        if (safeParam("module")){
             echo("selectedModule = \"".$_GET["module"]."\";");
         }        
-        if (isset($_GET["lg"])){
+        if (safeParam("lg")){
             echo("lg = \"".$_GET["lg"]."\";");
             echo("window.localStorage[\"lg\"] = \"".$_GET["lg"]."\" ;");
         }        

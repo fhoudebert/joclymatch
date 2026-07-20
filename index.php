@@ -114,10 +114,20 @@
 
 
 	<?php
-	if(isset($_GET["mid"])){
+	// Ces parametres GET sont echos tels quels dans le <script> ci-dessus :
+	// sans validation, ?mid="; ...code... //  permet d'injecter du script
+	// dans la page (XSS reflechi). Meme approche que fileio.php : les
+	// valeurs legitimes (ids generes par gamespanel.js, noms de jeux Jocly,
+	// codes langue) sont deja uniquement [A-Za-z0-9_-], donc une valeur
+	// valide passe exactement comme avant et une valeur forgee est ignoree
+	// (la variable garde son defaut).
+	function safeParam($name){
+		return isset($_GET[$name]) && preg_match('/^[A-Za-z0-9_-]+$/', $_GET[$name]);
+	}
+	if(safeParam("mid")){
 		echo("matchDetails.matchId = \"".$_GET["mid"]."\"; ");
 	}
-	if(isset($_GET["game"])){
+	if(safeParam("game")){
 		echo("matchDetails.gameName = \"".$_GET["game"]."\"; ");
 	}
 	if(isset($_GET["player"])){
@@ -128,7 +138,7 @@
 			echo("iamPlayer = Jocly.PLAYER_B;");
 		}
 	}
-	if (isset($_GET["lg"])){
+	if (safeParam("lg")){
 		echo("lg = \"".$_GET["lg"]."\";");
 		echo("window.localStorage[\"lg\"] = \"".$_GET["lg"]."\" ;");
 	}    
