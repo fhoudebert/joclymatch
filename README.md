@@ -2,8 +2,6 @@
 
 A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/jocly2) board games online with a friend — no database, no account, no tracking.
 
-JoclyMatch started as an experiment by Jérôme Choain ([@jcfrog](https://github.com/jcfrog)) to keep playing Jocly games after the shutdown of jocly.com, and has since been extended. Jocly itself is an open-source board game library created by Michel Gutierrez, offering more than a hundred games (chess and chess variants, checkers, and many more); its development has been restarted with contributions from HG Muller and François Houdebert.
-
 ## What you get
 
 - **Play against the computer** — pick a game from the panel and play solo.
@@ -66,7 +64,7 @@ $pushWsUrl = "wss://example.org/push/";
 
 - [jocly2](https://github.com/fhoudebert/jocly2) — the Jocly board game library (games, 2D/3D views, AI)
 - [jcfrog/jocly-simple-match](https://github.com/jcfrog/jocly-simple-match) — the original experiment this project is based on
-
+- [tabulon](https://github.com/fhoudebert/tabulon) — Tabulon can play remotely with a joclymatch server
 ## License
 
-See the repository for license information. Contributions and bug reports are welcome through GitHub issues and pull requests.
+AGPL-3.0 (see `package.json`) — Tabulon builds on the Jocly library and JoclyBoard, both AGPL.
