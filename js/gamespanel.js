@@ -1,9 +1,20 @@
 
+// "Jouer seul" ouvre le lecteur Jocly ($joclyPlayerURL dans localconf.php,
+// ex. .../control.html). En francais (lg == "fr"), on ouvre la variante
+// localisee control_fr.html. Si l'URL configuree ne se termine pas par
+// control.html (ex. un index.php maison), le remplacement ne matche pas
+// et l'URL est utilisee telle quelle : aucun changement dans ce cas.
+function playerURLForLanguage(){
+    if (lg == "fr")
+        return playerURL.replace(/control\.html$/i, "control_fr.html");
+    return playerURL;
+}
+
 function startSelectedGame(){
     if(selectedGame == ""){
         alert(t("Please select a game first"));
     }else{
-        window.open(playerURL+"?game="+selectedGame,'_blank');
+        window.open(playerURLForLanguage()+"?game="+selectedGame,'_blank');
     }
 }
 
