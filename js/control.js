@@ -272,9 +272,13 @@ class ChatData{
                     gameid:matchDetails.matchId
                 },
                 function(json){
-                    // the output of the response is now handled via a variable call 'results'
-                    var data = JSON.parse(json);
-                    if (data.messages != undefined){
+                    // fileio.php repond desormais avec l'en-tete
+                    // Content-Type: application/json : jQuery a alors DEJA
+                    // parse la reponse et nous passe un objet, pas une
+                    // chaine. JSON.parse(objet) donnerait
+                    // '"[object Object]" is not valid JSON'.
+                    var data = (typeof json === 'string') ? JSON.parse(json) : json;
+                    if (data && data.messages != undefined){
                         // reset 
                         this.msgs = [] ; 
                         var nbAdded = 0 ;                           
@@ -416,7 +420,9 @@ function loadMatchFromID(gameid,match,waitMode){
             // attendue -- on ignore silencieusement plutot que de planter,
             // le prochain sondage reessaiera.
             var data;
-            try { data = JSON.parse(json); }
+            // Comme fileio.php envoie Content-Type: application/json,
+            // jQuery parse deja la reponse : json est alors un objet.
+            try { data = (typeof json === 'string') ? JSON.parse(json) : json; }
             catch (e) {
                 // Serveur dont localconf.php (ou une notice PHP) ecrit du
                 // texte AVANT le JSON : on retente a partir de la premiere

@@ -40,8 +40,22 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
         // n'apportait rien)
         // Ecriture atomique (fichier temporaire puis rename()) : evite qu'un
         // load() concurrent ne lise un fichier a moitie ecrit.
+        // Le repertoire de sauvegarde ($savePath, ex. "saves/") ne fait pas
+        // partie du depot : sur un deploiement neuf il n'existe pas, et
+        // fopen() echouait alors ("No such file or directory") suivi d'un
+        // fatal error fputs(false, ...) -- la partie n'etait jamais ecrite.
+        $dir = dirname($fn);
+        if ($dir !== '' && $dir !== '.' && !is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
         $tmp = $fn.".tmp".uniqid();
-        $fp = fopen($tmp,"wt");
+        $fp = @fopen($tmp,"wt");
+        if ($fp === false) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "cannot write save file"));
+            exit;
+        }
         fputs($fp,$_POST['gamedata']);
         fclose($fp);
         rename($tmp,$fn);
@@ -95,10 +109,21 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
     $fn = chatfileName($_POST['gameid']);
     
     if($_POST['chatioaction']=='save' && isset($_POST['chatmsg'])){       
-        $fp = fopen($fn,"at");
-        fputs($fp,$_POST['chatmsg']."\n");
-        fclose($fp);
-        echo("chat saved : ok");
+        // Meme protection que pour la sauvegarde de partie : creer le
+        // repertoire s'il manque et ne pas ecrire sur un handle invalide.
+        $dir = dirname($fn);
+        if ($dir !== '' && $dir !== '.' && !is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $fp = @fopen($fn,"at");
+        if ($fp === false) {
+            http_response_code(500);
+            echo("chat save failed");
+        } else {
+            fputs($fp,$_POST['chatmsg']."\n");
+            fclose($fp);
+            echo("chat saved : ok");
+        }
     }
     if(($_POST['chatioaction']=='load')){
         header('Content-Type: application/json');
