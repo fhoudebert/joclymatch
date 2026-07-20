@@ -1,9 +1,28 @@
 var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+// L'id de partie est le SEUL controle d'acces a un match : quelqu'un qui le
+// devine peut lire la partie et le chat, et jouer. Math.random() n'est pas
+// concu pour ca (graine observable/predictible selon le moteur) ; on tire
+// donc les caracteres via crypto.getRandomValues (present dans tous les
+// navigateurs qui font tourner Jocly), avec rejet des valeurs hautes pour
+// une repartition uniforme. Meme alphabet, memes longueurs, meme format
+// d'id qu'avant -- rien ne change pour le reste du code ni les liens
+// existants. Math.random() reste en secours si crypto manquait.
 function makeid(length) {
     var result           = '';
     var charactersLength = characters.length;
-    for ( var i = 0; i < length; i++ ) {
-       result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    var cryptoObj = (typeof crypto !== 'undefined') ? crypto : null;
+    if (cryptoObj && cryptoObj.getRandomValues) {
+        // plus grand multiple de charactersLength <= 256, pour rejeter sans biais
+        var limit = Math.floor(256 / charactersLength) * charactersLength;
+        var buf = new Uint8Array(1);
+        for ( var i = 0; i < length; i++ ) {
+            do { cryptoObj.getRandomValues(buf); } while (buf[0] >= limit);
+            result += characters.charAt(buf[0] % charactersLength);
+        }
+    } else {
+        for ( var i = 0; i < length; i++ ) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        }
     }
     return result;
 }
