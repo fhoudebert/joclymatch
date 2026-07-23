@@ -52,16 +52,12 @@ function openRules(){
             bRulesOpen = true ;
             console.log();
             var rulesPath = "" ;
-            if (p.model.rules != undefined){
-                if (typeof(p.model.rules) == "string"){
-                    rulesPath = p.view.fullPath+"/"+p.model.rules ; 
-                }else{
-                    if (lg == "fr" && p.model.rules.fr){
-                        rulesPath = p.view.fullPath+"/"+p.model.rules.fr ; 
-                    }else if (p.model.rules.en){
-                        rulesPath = p.view.fullPath+"/"+p.model.rules.en ; 
-                    }
-                }
+            // Meme regle de choix de langue que pour le resume, via le
+            // helper commun (comportement inchange : fr si dispo et
+            // interface en francais, anglais sinon).
+            var rulesRelPath = localizedText(p.model.rules);
+            if (rulesRelPath.length > 0){
+                rulesPath = p.view.fullPath+"/"+rulesRelPath ;
             }
             if (rulesPath.length > 0){
                 loadRules(rulesPath , p.view.fullPath);
@@ -113,7 +109,7 @@ function selectGame(name){
         console.log(p);
         var linkToThisPage = matchRootURL+"gamespanel.php?game="+name;        
         $("#gd-game-name").html(p.model["title-en"]+" <a class=\"page-link\" href=\""+linkToThisPage+"\">link</a>");
-        $("#gd-game-abstract").text(p.model["summary"]);
+        $("#gd-game-abstract").text(localizedText(p.model["summary"]));
         $("#gd-buttons-play").css("background","#2dbd2d");
         $(".gd-game-icon-img").attr("src", p.view.fullPath+"/"+p.model.thumbnail);
         if (p.model.rules !== undefined){

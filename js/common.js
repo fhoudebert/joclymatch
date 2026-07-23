@@ -68,3 +68,25 @@ function escapeHtml(s){
         return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
 }
+
+
+// Renvoie la variante localisee d'un champ de modele de jeu qui peut etre
+// soit une simple chaine (ancien format, non traduit), soit un objet
+// { "en": ..., "fr": ... }. Regle identique a celle deja utilisee pour
+// les regles : langue courante si presente, sinon anglais par defaut.
+// Ainsi un jeu qui fournit "summary": "texte" continue de s'afficher tel
+// quel, et un jeu qui fournit un objet s'affiche dans la langue de
+// l'interface. Aucun jeu existant n'est a modifier.
+function localizedText(value){
+    if (value === undefined || value === null)
+        return "";
+    if (typeof(value) == "string")
+        return value;
+    if (typeof(value) != "object")
+        return String(value);
+    if (typeof lg !== "undefined" && value[lg])
+        return value[lg];
+    if (value.en)
+        return value.en;
+    return "";
+}
