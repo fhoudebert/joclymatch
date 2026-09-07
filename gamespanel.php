@@ -34,7 +34,6 @@
             <div id="gd-buttons-rules" class="gd-button" onClick="javascript:openRules();"><span class='t'>Rules</span></div>
             <div id="gd-buttons-match" class="gd-button" onClick="javascript:createMatch();"><span class='t'>Create match</span> <img class="button-svg-pic" src="i/users-connected.svg"></div>
         </div>
-        <div id="jocly-github"><a href="https://github.com/mi-g/jocly"><span class='t'>Jocly on Github</span></a></div>
         <div id="match-area">
             <div><span class='t'>Link for player A : </span></a><input class="player-link" id="linka" size="70" spellcheck="false" readonly="" type="text" value="link for player a"> <a id="blinka" href="javascript:copy2Clipboard('a');"><span class='t'>Copy</span></a> • <a id="goplaya" target="_blank" href=""><span class='t'>Open</span></a></div>
             <div><span class='t'>Link for player B : </span></a><input class="player-link" id="linkb" size="70" spellcheck="false" readonly="" type="text" value="link for player b"> <a id="blinkb" href="javascript:copy2Clipboard('b');"><span class='t'>Copy</span></a> • <a id="goplayb" target="_blank" href=""><span class='t'>Open</span></a></div>
