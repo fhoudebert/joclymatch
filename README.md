@@ -44,6 +44,36 @@ $savePath       = "saves/";
 
 5. Open `gamespanel.php` in your browser, pick a game, and play!
 
+### Optional settings
+
+Match and chat files used to accumulate forever: nothing ever deleted them, and
+the only way to reclaim space was to remove them by hand. They now expire, and
+the limits below can be tuned — all of them are optional, and the defaults are
+what you get without writing anything.
+
+```php
+// How long an untouched match file is kept. The common case is the game
+// abandoned in silence, which no client is ever going to close.
+$saveTTL       = 30 * 24 * 3600;   // 30 days
+
+// Largest match state accepted in one save.
+$saveMaxBytes  = 1048576;          // 1 MB
+
+// Largest chat log for one match. The file is appended to, so without a
+// bound it grows for as long as the game lasts.
+$chatMaxBytes  = 262144;           // 256 KB
+```
+
+The clean-up is opportunistic and bounded — there is no cron on shared
+hosting, so a handful of files are checked on each save rather than the whole
+directory. A client that knows the game is over can also delete it outright:
+
+```
+POST gameioaction=drop  gameid=<id>     -> {"ok":true}
+```
+
+which removes the match file and its chat log together.
+
 ## Optional: faster move notifications
 
 By default, opponents' moves show up through periodic polling. Everything below is **disabled by default** and entirely optional — without these lines in `localconf.php`, the behavior is unchanged.

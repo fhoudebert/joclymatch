@@ -10,6 +10,28 @@ ob_start();
 require "localconf.php";
 ob_end_clean();
 
+// Reglages, tous surchargeables depuis localconf.php.
+//
+// UNE PARTIE ABANDONNEE NE DOIT PAS RESTER INDEFINIMENT. Jusqu'ici rien
+// n'effacait rien : les fichiers de partie ET de chat s'accumulaient sans
+// limite sur l'hebergement, et le seul moyen d'en reprendre le controle etait
+// d'aller les supprimer a la main. 30 jours laissent le temps d'une partie par
+// correspondance ; c'est la valeur retenue par match.php de mogichex, qui
+// resout le meme probleme.
+if (!isset($saveTTL)) {
+    $saveTTL = 30 * 24 * 3600;
+}
+// Un etat de partie complet reste petit, mais rien ne le bornait : n'importe
+// qui pouvait remplir le disque en un POST. La meme limite que match.php.
+if (!isset($saveMaxBytes)) {
+    $saveMaxBytes = 1048576;
+}
+// Le fichier de chat est en AJOUT : sans borne il grossit tant que la partie
+// dure. Celle-ci porte sur le fichier entier, pas sur un message.
+if (!isset($chatMaxBytes)) {
+    $chatMaxBytes = 262144;
+}
+
 // gameid sert a construire un nom de fichier (fileName/chatfileName) : on le
 // valide avant tout usage pour empecher une traversee de repertoire
 // (ex. gameid=../../ailleurs/quelquechose). Les identifiants legitimes
@@ -29,12 +51,64 @@ function chatfileName($matchId){
     return $savePath.$matchId."-chat.txt" ;
 }
 
+// Menage opportuniste, BORNE : il n'y a pas de cron sur un hebergement
+// mutualise, donc le seul moment ou l'on peut faire le tri est une requete
+// ordinaire. On en profite pour regarder quelques fichiers -- pas tout le
+// repertoire, sous peine de faire payer a un joueur le menage de mille
+// parties. Sur un serveur actif, quarante par requete suffisent largement a
+// suivre le rythme des creations.
+//
+// Les deux familles de fichiers sont balayees ensemble : un "-chat.txt" est
+// aussi un ".txt", et le laisser derriere serait garder la conversation d'une
+// partie qui n'existe plus -- exactement ce qu'on cherche a eviter.
+function sweepOldFiles(){
+    global $savePath, $saveTTL;
+    if (!is_dir($savePath)) {
+        return;
+    }
+    $dh = @opendir($savePath);
+    if (!$dh) {
+        return;
+    }
+    $seen = 0;
+    $cutoff = time() - $saveTTL;
+    while (($f = readdir($dh)) !== false && $seen < 40) {
+        // Les temporaires d'une ecriture atomique interrompue (le fichier
+        // s'appelle <partie>.txt.tmp<unique>) ne portent pas l'extension et
+        // n'etaient donc effaces par personne : une coupure au mauvais moment
+        // laissait un fichier a vie. La borne de temps est la meme, largement
+        // au-dela de la duree d'un rename().
+        if (strpos($f, '.tmp') !== false) {
+            $seen++;
+            if (@filemtime($savePath . $f) < $cutoff) {
+                @unlink($savePath . $f);
+            }
+            continue;
+        }
+        if (substr($f, -4) !== '.txt') {
+            continue;
+        }
+        $seen++;
+        $p = $savePath . $f;
+        if (@filemtime($p) < $cutoff) {
+            @unlink($p);
+        }
+    }
+    closedir($dh);
+}
+
 // games
 if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
 
     $fn = fileName($_POST['gameid']);
     
-    if($_POST['gameioaction']=='save' && isset($_POST['gamedata'])){       
+    if($_POST['gameioaction']=='save' && isset($_POST['gamedata'])){
+        if (strlen($_POST['gamedata']) > $saveMaxBytes) {
+            http_response_code(413);
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "payload too large"));
+            exit;
+        }
         // (echos de debug retires : les clients ignorent le corps de la
         // reponse de save, et renvoyer les donnees POST telles quelles
         // n'apportait rien)
@@ -59,6 +133,20 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
         fputs($fp,$_POST['gamedata']);
         fclose($fp);
         rename($tmp,$fn);
+        sweepOldFiles();
+    }
+
+    // Suppression explicite, pour un client qui sait que la partie est finie.
+    // Complement du menage par anciennete, pas remplacement : le cas courant
+    // reste la partie abandonnee en silence, que personne ne vient clore --
+    // c'est le TTL qui s'en occupe. Les deux fichiers partent ensemble : le
+    // chat d'une partie effacee n'a plus de sens.
+    if($_POST['gameioaction']=='drop'){
+        @unlink($fn);
+        @unlink(chatfileName($_POST['gameid']));
+        header('Content-Type: application/json');
+        echo json_encode(array("ok" => true));
+        exit;
     }
     if(($_POST['gameioaction']=='load')){
         // Long-polling optionnel (voir js/control.js, LONG_POLL_ENABLED) :
@@ -115,14 +203,40 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
         if ($dir !== '' && $dir !== '.' && !is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
+        // UN MESSAGE EST UNE LIGNE, et le fichier est relu ligne par ligne
+        // avant d'etre recolle en JSON par join(",", ...). Un saut de ligne
+        // DANS le message couperait donc le JSON de l'auteur en deux
+        // fragments invalides, et la reponse du chat deviendrait illisible
+        // POUR LES DEUX JOUEURS -- durablement, puisque le fichier est en
+        // ajout. Le client de joclymatch envoie du JSON.stringify, qui n'en
+        // emet jamais ; un autre client, si. On refuse plutot que d'abimer le
+        // fil de facon irreversible.
+        if (strpos($_POST['chatmsg'], "\n") !== false || strpos($_POST['chatmsg'], "\r") !== false) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "chat message must be a single line"));
+            exit;
+        }
+        // Le fichier est en ajout : sans borne il grossit tant que la partie
+        // dure. On refuse le message plutot que de tronquer le fil.
+        clearstatcache(true, $fn);
+        $current = file_exists($fn) ? filesize($fn) : 0;
+        if ($current + strlen($_POST['chatmsg']) + 1 > $chatMaxBytes) {
+            http_response_code(413);
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "chat log full"));
+            exit;
+        }
         $fp = @fopen($fn,"at");
         if ($fp === false) {
             http_response_code(500);
-            echo("chat save failed");
+            header('Content-Type: application/json');
+            echo json_encode(array("error" => "chat save failed"));
         } else {
             fputs($fp,$_POST['chatmsg']."\n");
             fclose($fp);
-            echo("chat saved : ok");
+            header('Content-Type: application/json');
+            echo json_encode(array("ok" => true));
         }
     }
     if(($_POST['chatioaction']=='load')){
@@ -132,9 +246,18 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
         // ($fp) ne puisse s'en apercevoir, polluant la reponse malgre le
         // else ci-dessous qui gere pourtant deja correctement ce cas.
         if (file_exists($fn)){
+            // Initialise AVANT la boucle : sur un fichier existant mais vide
+            // -- un premier message refuse, une ecriture interrompue -- la
+            // boucle ne tournait pas, $msgs restait indefini, et le join()
+            // emettait un avertissement PHP juste devant le JSON. C'est la
+            // panne que tout le reste de ce fichier s'emploie deja a eviter.
+            $msgs = array();
             $fp = fopen($fn,"rt");
             while($chatdata = fgets($fp)){
-                $chatdata = substr($chatdata, 0, -1); // to remove the \n
+                $chatdata = rtrim($chatdata, "\r\n");
+                if ($chatdata === '') {
+                    continue;
+                }
                 $msgs[]=$chatdata;
             }
             fclose($fp);
