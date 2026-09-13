@@ -23,7 +23,14 @@
 
 
 <body>
-    <div id="info-div"><a id="info-link" href="doc/html/readthis.html">&#9432; <span class='t'>About this site</span></a></div>
+    <!-- NOUVEL ONGLET, et ce n'est pas un detail de confort : la notice remplacait
+     la page, et le retour du navigateur ne ramenait pas la ou l'on etait --
+     depuis un match, on le perdait ; depuis ce panneau, on perdait la selection
+     et les deux liens de partie qu'on venait de creer. Le bloc a de la valeur
+     (c'est le seul chemin vers la notice) ; c'est la navigation qui etait
+     fautive. L'ancien lien « Jocly on Github » portait d'ailleurs deja
+     target="_blank", pour exactement cette raison. -->
+<div id="info-div"><a id="info-link" href="doc/html/readthis.html" target="_blank" rel="noopener">&#9432; <span class='t'>About this site</span></a></div>
     <div id="game-details">
         <div id="lg-flag"><img id="flagicon" src="i/flags/en.svg"></div>
         <div id="gd-game-icon"><img class="gd-game-icon-img" src="i/jocly-logo.png"></div>

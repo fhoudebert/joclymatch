@@ -121,7 +121,13 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 				</div>
 			</div>
         </div>
-		<div id="overhead-menu"><a href="<?php echo(htmlspecialchars($joclyMatchBase."/gamespanel.php", ENT_QUOTES)); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a id="info-link" href="doc/html/readthis.html"><span class="t">About this site</span></a></div>
+		<!-- La notice s'ouvre dans un NOUVEL ONGLET : elle remplacait la page de
+		     match, et le retour du navigateur renvoyait au panneau des jeux --
+		     le match etait perdu. C'est la seule facon d'atteindre la notice
+		     depuis une partie, donc le bloc reste ; c'est la navigation qui
+		     etait fautive. L'ancien lien « Jocly on Github » portait deja
+		     target="_blank", pour exactement cette raison. -->
+		<div id="overhead-menu"><a href="<?php echo(htmlspecialchars($joclyMatchBase."/gamespanel.php", ENT_QUOTES)); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a id="info-link" href="doc/html/readthis.html" target="_blank" rel="noopener"><span class="t">About this site</span></a></div>
 
 
     </div>
