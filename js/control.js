@@ -221,6 +221,32 @@ function openChat(){
  * Rules
  */
 var gameFullPath = null ;
+// Configuration du jeu, gardee pour pouvoir RECHARGER les regles quand la
+// langue change. Elles etaient lues une seule fois au demarrage, et toujours
+// en anglais.
+var rulesConfig = null;
+
+/**
+ * Charge les regles dans la langue courante.
+ *
+ * Deux corrections ici. D'abord `p.model.rules.en` etait CODE EN DUR : les
+ * regles francaises existent pour la plupart des jeux (le panneau des jeux les
+ * sert deja, via localizedText) mais la page de partie ne les a jamais
+ * montrees. Ensuite ce meme acces levait une exception sur un jeu sans regles
+ * -- `undefined.en` -- exception avalee par la promesse, donc un volet de
+ * regles vide sans le moindre message.
+ */
+function loadRulesForLanguage(){
+    if (!rulesConfig) return;
+    var rel = localizedText(rulesConfig.model.rules);
+    if (!rel.length){
+        $("#rules").html("<p>"+t("Sorry, no rules available for")+" "
+            + escapeHtml(localizedTitle(rulesConfig.model, matchDetails.gameName))+"</p>");
+        return;
+    }
+    loadRules(rulesConfig.view.fullPath+"/"+rel, rulesConfig.view.fullPath);
+}
+
 function loadRules(rulesPath,fullPath){
     $("#rules").load(rulesPath, null, function(data, status, jqXGR){
         var re = /{GAME}/gi ;
@@ -249,9 +275,32 @@ class ChatMsg{
     }
     setPseudo(pseudo){this.data.pseudo=pseudo}
     getId(){return ""+this.data.time+"-"+this.data.key}
+    /**
+     * Ce message est-il affichable ?
+     *
+     * TOLERANCE AUX AUTRES CLIENTS. Le fichier de chat est partage, et rien
+     * ne garantit que l'autre bout soit joclymatch : Tabulon ecrit des
+     * messages typés (`kind` : presence, relance) qui n'ont PAS de champ
+     * `msg`. Servis a html() tels quels, ils affichaient « undefined » --
+     * exactement le defaut qu'on vient de corriger sur les titres.
+     *
+     * On ignore donc en silence ce qu'on ne sait pas rendre, plutot que de
+     * l'afficher de travers. C'est aussi ce qui permettra d'ajouter un genre
+     * sans casser les clients deja installes.
+     */
+    displayable(){
+        var d = this.data || {};
+        if (typeof d.msg != "string") return false;
+        // `kind` absent = message de discussion ordinaire, la convention
+        // d'avant. Tout autre genre appartient a un client qu'on ne connait
+        // pas encore.
+        if (d.kind !== undefined && d.kind !== "chat") return false;
+        return true;
+    }
     html(){
         var cn = "cm-player-" + ((this.data.player == Jocly.PLAYER_A) ? "a" : "b") ;
-        var pn = (this.data.pseudo.length > 0)?this.data.pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
+        var pseudo = (typeof this.data.pseudo == "string") ? this.data.pseudo : "";
+        var pn = (pseudo.length > 0)?pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
         var d = new Date(this.data.time);
         var id = this.getId();
         // Le contenu du message et le pseudo viennent de l'AUTRE joueur via
@@ -262,6 +311,17 @@ class ChatMsg{
         // code (informUserInChatroom / NotifyWinner) et contiennent des liens
         // HTML voulus : eux seuls restent inseres tels quels, comme avant.
         var body = escapeHtml(this.data.msg);
+
+        // CORPS SCELLE : `enc` marque un message chiffre par son auteur (voir
+        // le format de Tabulon). joclymatch n'a pas la cle, et afficher le
+        // base64 brut serait du bruit illisible que l'utilisateur prendrait
+        // pour un defaut. On montre qu'un message existe et qu'il manque de
+        // quoi le lire -- un trou silencieux dans une conversation serait
+        // pire.
+        if (this.data.enc){
+            cn += " cm-sealed";
+            body = "🔒 " + escapeHtml(t("Encrypted message — this client has no key to read it."));
+        }
 
         // system msgs
         if (this.data.player == 0){
@@ -328,6 +388,7 @@ class ChatData{
                             var m = data.messages[i];
                             var msg = new ChatMsg();
                             msg.loadFromData(m);
+                            if (!msg.displayable()) continue;
                             this.msgs.push(msg);
                             // add it to display if not present
                             var id = "#"+msg.getId();
@@ -600,9 +661,8 @@ $(document).ready(function () {
     
     Jocly.getGameConfig(gameName).then((p)=>{
         gameFullPath = p.view.fullPath ;
-        var rulesPath = p.view.fullPath+"/"+p.model.rules.en ;
-        console.log(rulesPath);
-        loadRules(rulesPath,p.view.fullPath);
+        rulesConfig = p;
+        loadRulesForLanguage();
     })
 
     Jocly.createMatch(gameName).then((match) => {
@@ -931,6 +991,10 @@ var translations = {
     "Player A" : {fr: "Joueur A"},
     "Player B" : {fr: "Joueur B"},
     "Replay last move" : {fr: "Rejouer dernier coup"},
+    "About this site" : {fr : "À propos de ce site"},
+    "Encrypted message — this client has no key to read it." :
+        {fr : "Message chiffré — ce client n'a pas la clé pour le lire."},
+    "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"},
     "Take back last move" : {fr : "Annuler le dernier coup"},
     "Restart match" : {fr : "Recommencer la partie"},
     "Take back the last move? Your opponent's board will change too." :
@@ -984,6 +1048,12 @@ function setLanguage(newlg){
         // Le titre du jeu vient de jocly, pas de la table de traductions :
         // la boucle ci-dessus ne le touche pas.
         if (gameModel) updateGameTitle();
+        // Les regles non plus : elles sont un fichier HTML par langue, qu'il
+        // faut recharger et non retraduire.
+        loadRulesForLanguage();
+        // La notice existe en deux langues, comme sur le panneau des jeux.
+        $("#info-link").attr("href",
+            lg=="fr" ? "doc/html/readthis_fr.html" : "doc/html/readthis.html");
     }
 }
 

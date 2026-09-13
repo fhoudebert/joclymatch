@@ -143,6 +143,49 @@ $raw = request(array('chatioaction' => 'load', 'gameid' => $empty));
 check('un fil vide rend du JSON propre, sans avertissement devant',
     json_decode($raw, true) !== null && strpos($raw, 'Warning') === false);
 
+// --- dialecte match.php (action / mid / data) --------------------------------
+//
+// mogichex parle action/mid/data la ou joclymatch et Tabulon parlent
+// gameioaction/gameid/gamedata. Les deux doivent aboutir au MEME fichier :
+// c'est toute la raison d'etre de la traduction, et ce que ces verifications
+// tiennent.
+
+$dia = 'dialecte-' . getmypid();
+request(array('action' => 'save', 'mid' => $dia, 'data' => '{"venu":"de mogichex"}'));
+check('le dialecte match.php ecrit bien la partie',
+    file_get_contents($tmp . $dia . '.txt') === '{"venu":"de mogichex"}');
+
+$r = request(array('gameioaction' => 'load', 'gameid' => $dia));
+check('et le dialecte joclymatch la relit', strpos($r, 'de mogichex') !== false);
+
+$r = request(array('action' => 'load', 'mid' => $dia));
+check('le dialecte match.php relit aussi', strpos($r, 'de mogichex') !== false);
+
+// Un identifiant invalide doit etre refuse quel que soit le dialecte : la
+// traduction a lieu AVANT la validation, sinon elle ouvrirait une porte que
+// l'autre chemin ferme.
+request(array('action' => 'save', 'mid' => '../evade', 'data' => 'x'));
+check('le dialecte match.php ne contourne pas la validation d identifiant',
+    !file_exists($tmp . '../evade.txt') && !file_exists(dirname($tmp) . '/evade.txt'));
+
+// Le dialecte d'origine reste prioritaire : un client qui enverrait les deux
+// obtient ce qu'il obtenait avant.
+$deux = 'deux-' . getmypid();
+request(array('gameioaction' => 'save', 'gameid' => $deux, 'gamedata' => 'joclymatch',
+    'action' => 'save', 'mid' => 'autre-' . getmypid(), 'data' => 'mogichex'));
+check('gameioaction l emporte quand les deux sont presents',
+    file_get_contents($tmp . $deux . '.txt') === 'joclymatch'
+    && !file_exists($tmp . 'autre-' . getmypid() . '.txt'));
+
+// Le chat de mogichex passe par des cles de partie ordinaires (<mid>-ca), donc
+// par le meme chemin : rien de special a prevoir.
+request(array('action' => 'save', 'mid' => $dia . '-ca', 'data' => '{"msgs":[]}'));
+check('une cle de fil mogichex est acceptee telle quelle',
+    file_exists($tmp . $dia . '-ca.txt'));
+
+$r = request(array('action' => 'drop', 'mid' => $dia));
+check('le dialecte match.php sait aussi effacer', !file_exists($tmp . $dia . '.txt'));
+
 // --- menage ------------------------------------------------------------------
 
 array_map('unlink', glob($tmp . '*'));

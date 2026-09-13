@@ -110,6 +110,14 @@ html,body {
     margin-left : 10%;
     border-radius : 5px 0 0 5px;
 }
+/* Message chiffre qu'on ne sait pas lire : present, signale, et visiblement
+   different d'un message ordinaire. Le montrer en clair-obscur vaut mieux que
+   de faire disparaitre un tour de conversation. */
+.cm-sealed > .cm-text {
+    font-style: italic;
+    opacity: .75;
+}
+
 .cm-system{
     background-color: rgba(255,255,255,1);
     margin : 10px 0;

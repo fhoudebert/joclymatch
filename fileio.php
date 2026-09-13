@@ -32,6 +32,32 @@ if (!isset($chatMaxBytes)) {
     $chatMaxBytes = 262144;
 }
 
+// DIALECTE match.php (mogichex) : action / mid / data.
+//
+// Trois applications parlent a ce relai -- joclymatch, Tabulon et mogichex --
+// et les deux premieres emploient gameioaction/gameid/gamedata quand la
+// troisieme emploie action/mid/data. Ce sont les MEMES operations : deposer un
+// texte sous un identifiant, le relire, l'effacer. Les traduire ici, en un
+// seul endroit et avant tout usage, evite d'ajouter une branche a chacune des
+// vingt lectures de $_POST qui suivent -- et de devoir s'en souvenir a la
+// prochaine.
+//
+// Le dialecte d'origine reste prioritaire : si gameioaction ou chatioaction
+// est present, on ne touche a rien. Un client qui enverrait les deux obtient
+// donc exactement ce qu'il obtenait avant.
+$mogichexDialect = false;
+if (!isset($_POST['gameioaction']) && !isset($_POST['chatioaction']) && isset($_POST['action'])) {
+    $mogichexDialect = true;
+    $_POST['gameioaction'] = $_POST['action'];
+    if (isset($_POST['mid']))   $_POST['gameid']     = $_POST['mid'];
+    if (isset($_POST['data']))  $_POST['gamedata']   = $_POST['data'];
+    // L'attente longue porte le meme sens des deux cotes ; elle reste soumise
+    // a $enableLongPolling, donc un serveur qui ne l'active pas repond tout de
+    // suite -- ce qui est exactement le repli que ces clients savent deja
+    // traiter.
+    if (isset($_POST['since'])) $_POST['sinceMtime'] = $_POST['since'];
+}
+
 // gameid sert a construire un nom de fichier (fileName/chatfileName) : on le
 // valide avant tout usage pour empecher une traversee de repertoire
 // (ex. gameid=../../ailleurs/quelquechose). Les identifiants legitimes
@@ -177,10 +203,15 @@ if ( isset($_POST['gameioaction']) && isset($_POST['gameid'])){
             // (sinceMtime) -- ignore sans effet par un client qui ne
             // regarde pas cet en-tete (le corps de la reponse ne change pas).
             header('X-File-Mtime: ' . filemtime($fn));
+            // Meme valeur sous le nom que lit un client mogichex. Emis pour
+            // tout le monde plutot que sous condition : un en-tete de plus ne
+            // gene personne, et une condition de plus se serait oubliee.
+            header('X-Match-Mtime: ' . filemtime($fn));
             echo(file_get_contents($fn));
         } else {
             header('Content-Type: application/json');
             header('X-File-Mtime: 0');
+            header('X-Match-Mtime: 0');
             // Toujours du JSON valide, meme sans match : le client teste
             // deja data.matchDetails/data.matchdata avant usage, donc {}
             // est ignore comme l'etait le corps vide -- mais sans passer

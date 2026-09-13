@@ -1,3 +1,26 @@
+<?php
+// localconf.php est charge ICI, AVANT toute sortie.
+//
+// IL L'ETAIT APRES : le menu de navigation employait $joclyMatchURL cinq
+// lignes AVANT son require, donc la variable y etait toujours vide et le lien
+// « Panneau des jeux » valait « gamespanel.php » tout court. Il ne marchait
+// que par resolution relative -- c'est-a-dire seulement quand la page est
+// servie depuis le meme repertoire, et pas du tout des qu'une reecriture
+// d'URL ou un chemin different s'en mele.
+//
+// Meme precaution que fileio.php : un localconf.php qui emet un BOM, une
+// ligne vide ou un avertissement n'a pas a l'inserer avant le doctype.
+ob_start();
+require "localconf.php";
+ob_end_clean();
+
+// Base absolue, avec ou sans barre finale dans localconf.php. Le README la
+// demande ; s'en remettre a la bonne volonte du fichier de configuration pour
+// une concatenation, c'est produire « .../joclymatchgamespanel.php » au
+// premier oubli.
+$joclyMatchBase = rtrim(isset($joclyMatchURL) ? $joclyMatchURL : '', '/');
+if ($joclyMatchBase === '') $joclyMatchBase = '.';
+?>
 <!doctype html>
 
 <html lang="en">
@@ -98,12 +121,11 @@
 				</div>
 			</div>
         </div>
-		<div id="overhead-menu"><a href="<?php echo($joclyMatchURL."gamespanel.php"); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a href="https://github.com/mi-g/jocly" target="_blank"><span class="t">Jocly on Github</span></a></div>
+		<div id="overhead-menu"><a href="<?php echo(htmlspecialchars($joclyMatchBase."/gamespanel.php", ENT_QUOTES)); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a id="info-link" href="doc/html/readthis.html"><span class="t">About this site</span></a></div>
 
 
     </div>
 
-	<?php require "localconf.php" ?>
     <script src="<?php echo($joclyDistPath);?>"></script>
     <script src="js/jquery-3.7.1.min.js"></script>
 	<script>
