@@ -62,7 +62,7 @@ function openRules(){
             if (rulesPath.length > 0){
                 loadRules(rulesPath , p.view.fullPath);
             }else{
-                $("#rules").html("<p>Sorry, no rules available for "+p.model["title-en"]+"</p>");
+                $("#rules").html("<p>"+t("Sorry, no rules available for")+" "+escapeHtml(localizedTitle(p.model, selectedGame))+"</p>");
             }
         });
     }
@@ -108,7 +108,7 @@ function selectGame(name){
     Jocly.getGameConfig(name).then((p)=>{
         console.log(p);
         var linkToThisPage = matchRootURL+"gamespanel.php?game="+name;        
-        $("#gd-game-name").html(p.model["title-en"]+" <a class=\"page-link\" href=\""+linkToThisPage+"\">link</a>");
+        $("#gd-game-name").html(escapeHtml(localizedTitle(p.model, name))+" <a class=\"page-link\" href=\""+linkToThisPage+"\">link</a>");
         $("#gd-game-abstract").text(localizedText(p.model["summary"]));
         $("#gd-buttons-play").css("background","#2dbd2d");
         $(".gd-game-icon-img").attr("src", p.view.fullPath+"/"+p.model.thumbnail);
@@ -133,6 +133,30 @@ function gameClicked(g){
     console.log(selectedGame);
 }
 
+// Modeles des jeux deja charges, pour pouvoir retraduire les infobulles sans
+// redemander leur configuration a jocly.
+var gameModels = {};
+
+/**
+ * Repasse les titres dans la langue courante.
+ *
+ * On ne rappelle PAS selectGame() : il referme la zone de match et vide les
+ * deux liens de partie. Changer de langue apres avoir cree un match effacerait
+ * les liens qu'on s'appretait a envoyer.
+ */
+function refreshGameTitles(){
+    for (var name in gameModels){
+        $("#"+name).attr("title", localizedTitle(gameModels[name], name));
+    }
+    if (selectedGame.length > 0 && gameModels[selectedGame]){
+        var lien = matchRootURL+"gamespanel.php?game="+selectedGame;
+        $("#gd-game-name").html(
+            escapeHtml(localizedTitle(gameModels[selectedGame], selectedGame))
+            + " <a class=\"page-link\" href=\""+lien+"\">link</a>");
+        $("#gd-game-abstract").text(localizedText(gameModels[selectedGame]["summary"]));
+    }
+}
+
 function addGame(gameName){
     console.log(gameName);
     Jocly.getGameConfig(gameName).then((p)=>{
@@ -140,8 +164,12 @@ function addGame(gameName){
         //$("#games-panel").append("<div>"+p.model["title-en"]+"</div>");
         if (selectedModule.length > 0 && selectedModule != p.model.module)
             return false ;            
+        // Le modele est GARDE : l'infobulle est posee une fois au chargement,
+        // mais la langue peut changer ensuite (drapeau en haut de page). Sans
+        // cela, la liste resterait dans la langue du premier affichage.
+        gameModels[gameName] = p.model;
         var d = $('<div/>', {
-            title : p.model["title-en"],
+            title : localizedTitle(p.model, gameName),
             module : p.model.module,
             id : gameName,
             class : 'game-thumb'        
@@ -198,6 +226,10 @@ function setLanguage(newlg){
         $(".t").each(function(){
             this.innerText = t($(this).attr("en-txt"));
         });
+        // Les titres de jeux viennent de jocly, pas de la table ci-dessous :
+        // ils ne sont pas touches par la boucle sur .t et doivent etre
+        // retraduits a part.
+        refreshGameTitles();
         // La notice existe en deux langues : on suit la locale active.
         $("#info-link").attr("href",
             lg=="fr" ? "doc/html/readthis_fr.html" : "doc/html/readthis.html");
@@ -231,7 +263,8 @@ var translations = {
     "Open" : {fr : "Ouvrir"},
     "Jocly on Github" : {fr : "Jocly sur Github"},
     "About this site" : {fr: "À propos de ce site"},
-    "Please select a game first" : {fr : "Merci de sélectionner un jeu"}
+    "Please select a game first" : {fr : "Merci de sélectionner un jeu"},
+    "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"}
 }
 
 function t(txt){

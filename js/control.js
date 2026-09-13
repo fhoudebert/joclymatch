@@ -477,10 +477,14 @@ function saveData(gameid,gamedata){
  * Window updates
  */
 
-var gameTitle = "";
+// Le MODELE du jeu, pas son titre deja resolu : la langue peut changer en
+// cours de partie (drapeau en haut de page), et un titre fige resterait dans
+// celle du chargement.
+var gameModel = null;
 function updateGameTitle(){
     var playerTxt =  (iamPlayer == Jocly.PLAYER_A) ? t("Player A") : t("Player B");
-    $("#game-title").show().text(gameTitle + " • " + playerTxt); 
+    var titre = localizedTitle(gameModel, matchDetails.gameName);
+    $("#game-title").show().text(titre + " • " + playerTxt); 
     var ps = $("#player-pseudo").val();
     if (ps.length==0) $("#player-pseudo").val((iamPlayer == Jocly.PLAYER_A) ? t("Player A") : t("Player B"));
  
@@ -554,7 +558,7 @@ $(document).ready(function () {
         // get game configuration to setup control UI
         match.getConfig()
             .then( (config) => {
-                gameTitle = config.model["title-en"];
+                gameModel = config.model;
                 updateGameTitle();
                 $("#close-games span").show();
                 $("#game-status").show();
@@ -891,6 +895,9 @@ function setLanguage(newlg){
         $(".t").each(function(){
             this.innerText = t($(this).attr("en-txt"));
         });
+        // Le titre du jeu vient de jocly, pas de la table de traductions :
+        // la boucle ci-dessus ne le touche pas.
+        if (gameModel) updateGameTitle();
     }
 }
 
