@@ -33,6 +33,16 @@ function NotifyWinner(winner) {
 var movePending = null;
 var nextMoveCounter = 0 ;
 
+// ANNULATION EN COURS : la boucle de jeu ne doit alors RIEN sauvegarder.
+//
+// `abortUserTurn()` fait ABOUTIR la promesse de `userTurn()` en attente — elle
+// ne rejette pas. La suite de la chaine (« un coup vient d'etre joue, on
+// compte et on sauvegarde ») s'executait donc au milieu de l'annulation, et
+// reecrivait le fichier avec la position d'AVANT : l'adversaire voyait le
+// retour arriere une seconde, puis le coup revenait. C'est le meme piege que
+// mogichex a documente, d'ou son indicateur `aborting`.
+var takingBack = false;
+
 var reloadCounter = 0 ;
 function checkIfOtherUserPlayed(delay) {
     return new Promise(function(resolve) {
@@ -69,6 +79,28 @@ function RunMatch(match, progressBar) {
                 changeFavicon(player==iamPlayer);
                 // display whose turn
                 $("#game-status").text(player==Jocly.PLAYER_A?t("A playing"):t("B playing"));
+                // ANNULER N'EST PROPOSE QUE PENDANT SON PROPRE TOUR, et ce
+                // n'est pas un scrupule de politesse : c'est la seule
+                // situation ou l'adversaire RECEVRA l'annulation.
+                //
+                // La boucle de jeu ne recharge la partie que dans sa branche
+                // « j'attends l'autre » (le `else` ci-dessous). Pendant que
+                // c'est a l'adversaire de jouer, son navigateur est bloque
+                // dans userTurn() et ne sonde PAS le serveur : mesure faite,
+                // zero rechargement. Une annulation envoyee a ce moment-la ne
+                // lui parviendrait jamais — pire, son prochain coup, calcule
+                // sur la position d'avant, ecraserait l'annulation sans que
+                // personne ne s'en apercoive.
+                //
+                // Pendant NOTRE tour, c'est l'inverse : l'autre attend, donc
+                // il sonde, donc il verra. Le bouton est donc masque le reste
+                // du temps plutot qu'offert et silencieusement sans effet.
+                var monTour = (player == iamPlayer);
+                match.getPlayedMoves().then((moves) => {
+                    var possible = monTour && moves.length > 0;
+                    $("#takeback").toggle(possible);
+                    $("#restart").toggle(possible);
+                });
                 if (player == iamPlayer){
                     $("#replaylastmove").attr('disabled', false);
                     $("#game-status").addClass("iamPlaying");
@@ -84,8 +116,17 @@ function RunMatch(match, progressBar) {
                             // reques user input
                             return match.userTurn()
                         }).then( () => {
-                            matchDetails.nbTurns ++;
-                            saveGameIfNecessary(match);
+                            // Une saisie interrompue n'est pas un coup joue.
+                            if (takingBack) return;
+                            // nbTurns est DEDUIT du nombre de coups plutot
+                            // qu'incremente : c'est la seule valeur que les
+                            // deux clients puissent calculer pareil, et elle
+                            // reste juste apres une annulation. Un compteur
+                            // incremente ne survit pas a un retour arriere.
+                            return match.getPlayedMoves().then((moves) => {
+                                matchDetails.nbTurns = moves.length;
+                                saveGameIfNecessary(match);
+                            });
                         })
                         else {
                             promise = promise.then( () => {                            
@@ -439,7 +480,7 @@ function loadMatchFromID(gameid,match,waitMode){
             }
             if (!data || !data.matchDetails || !data.matchdata) { return; }
 
-            if (matchDetails.nbTurns != data.matchDetails.nbTurns){
+            if (data.matchDetails.nbTurns > matchDetails.nbTurns){
                 matchDetails.nbTurns = data.matchDetails.nbTurns;
                 
                 console.log("HE HAS PLAYED!!");
@@ -448,6 +489,21 @@ function loadMatchFromID(gameid,match,waitMode){
                 match.load(data.matchdata).then( () => {
                     return match.playMove(lastOpponentMove);
                 }) ;
+            }else if (data.matchDetails.nbTurns < matchDetails.nbTurns){
+                // L'ADVERSAIRE A ANNULE. Le test etait un simple « different »,
+                // qui envoyait ce cas dans la branche ci-dessus : elle retire
+                // le dernier coup du fichier et le REJOUE, ce qui defaisait
+                // l'annulation d'un cran et animait un coup que personne ne
+                // venait de jouer. On charge donc la position telle quelle.
+                //
+                // Et on le DIT : sans cela le plateau change tout seul, sans
+                // que rien n'explique pourquoi.
+                var recule = matchDetails.nbTurns - data.matchDetails.nbTurns;
+                matchDetails.nbTurns = data.matchDetails.nbTurns;
+                match.load(data.matchdata);
+                informUserInChatroom(data.matchDetails.nbTurns == 0
+                    ? t("Your opponent restarted the match.")
+                    : t("Your opponent took back the last move."));
             }else{
                 // load match 
                 match.load(data.matchdata) ;
@@ -685,14 +741,6 @@ $(document).ready(function () {
                         }
                     });
                 });
-                $("#restart").on("click",function() {
-                    // restart match from the beginning
-                    match.rollback(0)
-                        .then( () => {
-                            RunMatch(match,progressBar);
-                        });
-                });
-
                 $("#save").on("click",function() {
                     // save match to the file system
                     match.save()
@@ -761,29 +809,57 @@ $(document).ready(function () {
 					match.viewControl("setPanorama",options);
                 });
 
+                // ANNULER LE DERNIER COUP, UN A LA FOIS.
+                //
+                // L'ancienne version deduisait « le dernier coup du joueur »
+                // d'une arithmetique de parite sur $("#mode").val(). Deux
+                // problemes : ce select n'existe pas dans cette page (mode
+                // valait toujours undefined, donc lastUserMove restait a -1 et
+                // le bouton n'aurait RIEN fait), et la parite suppose que les
+                // camps alternent strictement -- faux aux dames (prise
+                // multiple) et dans tout jeu a coups doubles.
+                //
+                // On annule donc UN coup, celui qui vient d'etre joue, quel
+                // que soit son auteur. Pour en annuler deux, on appuie deux
+                // fois : c'est composable, et cela ne suppose rien de
+                // l'alternance.
+                function rollbackTo(target, message){
+                    takingBack = true;
+                    // abortUserTurn() AVANT rollback(), jamais l'inverse : la
+                    // boucle de jeu attend peut-etre une saisie sur la
+                    // position actuelle, et elle ré-entrerait sur l'ancienne.
+                    return match.abortUserTurn()
+                        .then( () => match.abortMachineSearch() )
+                        .then( () => match.rollback(target) )
+                        .then( () => {
+                            // nbTurns est pose AVANT la sauvegarde : il part
+                            // dans le meme fichier, et c'est lui que le
+                            // sondage de l'adversaire compare.
+                            matchDetails.nbTurns = target;
+                            saveGameIfNecessary(match);
+                            informUserInChatroom(message);
+                            takingBack = false;
+                            RunMatch(match,progressBar);
+                        });
+                }
+
                 $("#takeback").on("click",function() {
                     match.getPlayedMoves()
                         .then( (playedMoves) => {
-                            // we want to go back to the last user move
-                            var mode = $("#mode").val();
-                            var lastUserMove = -1;
-                            if( 
-                                ((playedMoves.length % 2 == 1) && (mode=="self-self" || mode=="self-comp")) ||
-                                ((playedMoves.length % 2 == 0) && (mode=="self-self" || mode=="comp-self"))
-                                )
-                                    lastUserMove = playedMoves.length - 1;
-                            else if( 
-                                ((playedMoves.length % 2 == 1) && (mode=="self-self" || mode=="comp-self")) ||
-                                ((playedMoves.length % 2 == 0) && (mode=="self-self" || mode=="self-comp"))
-                                )
-                                    lastUserMove = playedMoves.length - 2;
-                            if(lastUserMove>=0)
-                                match.rollback(lastUserMove)
-                                    .then( () => {
-                                        RunMatch(match,progressBar);
-                                    });
-                            
+                            if (playedMoves.length < 1) return;
+                            // Le plateau de l'ADVERSAIRE va changer sous ses
+                            // yeux : on demande confirmation plutot que de le
+                            // faire d'un clic distrait.
+                            if (!window.confirm(t("Take back the last move? Your opponent's board will change too.")))
+                                return;
+                            rollbackTo(playedMoves.length - 1, t("You took back the last move."));
                         });
+                });
+
+                $("#restart").on("click",function() {
+                    if (!window.confirm(t("Restart this match from the beginning?")))
+                        return;
+                    rollbackTo(0, t("You restarted the match."));
                 });
 
                 // yeah, using the fullscreen API is not as easy as it should be
@@ -855,6 +931,16 @@ var translations = {
     "Player A" : {fr: "Joueur A"},
     "Player B" : {fr: "Joueur B"},
     "Replay last move" : {fr: "Rejouer dernier coup"},
+    "Take back last move" : {fr : "Annuler le dernier coup"},
+    "Restart match" : {fr : "Recommencer la partie"},
+    "Take back the last move? Your opponent's board will change too." :
+        {fr : "Annuler le dernier coup ? Le plateau de votre adversaire changera aussi."},
+    "Restart this match from the beginning?" :
+        {fr : "Recommencer cette partie depuis le début ?"},
+    "You took back the last move." : {fr : "Vous avez annulé le dernier coup."},
+    "You restarted the match." : {fr : "Vous avez recommencé la partie."},
+    "Your opponent took back the last move." : {fr : "Votre adversaire a annulé le dernier coup."},
+    "Your opponent restarted the match." : {fr : "Votre adversaire a recommencé la partie."},
     "My name" : {fr: "Mon nom"},
     "Chat" : {fr: "Clavardage"},
     "End of game" : {fr : "Fin de partie"},
