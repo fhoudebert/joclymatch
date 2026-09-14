@@ -1,0 +1,50 @@
+diff --git a/README.md b/README.md
+index fa2ad38..93fe112 100644
+--- a/README.md
++++ b/README.md
+@@ -74,6 +74,45 @@ POST gameioaction=drop  gameid=<id>     -> {"ok":true}
+ 
+ which removes the match file and its chat log together.
+ 
++## Other clients
++
++Three applications share this relay — joclymatch, [Tabulon](https://github.com/fhoudebert/tabulon)
++and [mogichex](https://github.com/fhoudebert/mogichex) — so the endpoints accept
++two spellings of the same operations, and the chat renderer tolerates messages
++it did not write.
++
++**Two dialects, one behaviour.** `action/mid/data` is translated to
++`gameioaction/gameid/gamedata` before anything else happens, `since` to
++`sinceMtime`, and `X-Match-Mtime` is sent alongside `X-File-Mtime`. The
++translation happens *before* the game-id validation, so neither spelling opens a
++door the other closes. If both are present the original spelling wins, so an
++existing client gets exactly what it got before.
++
++**The chat envelope.** One JSON object per line, `{"data": {…}}`, appended by
++the server:
++
++| Field | Meaning |
++|---|---|
++| `msg` | the text, **or** a base64 seal when `enc` is set |
++| `player` | `1` / `-1`, or `0` for service messages |
++| `pseudo` | display name, free text |
++| `time`, `key` | `time + "-" + key` is the message id |
++| `kind` | optional: `chat` when absent, else `presence`, `nudge`, … |
++| `quick`, `state` | optional: identifiers translated by the reader |
++| `enc` | optional: `1` means `msg` is sealed |
++
++**What this client does with what it does not understand.** An unknown `kind` is
++skipped in silence, so a fourth kind can be added without breaking installed
++clients. A message with no textual `msg` is skipped rather than shown as
++`undefined`. A sealed body (`enc:1`) is shown as a padlock and an explanation,
++never as raw base64 — a message you cannot read is still worth knowing about. A
++missing `pseudo` falls back to "Player A" / "Player B".
++
++Two things are worth knowing if you write the other end: a message must be **one
++line** (the server reads the file line by line and rejects `\r` or `\n` with a
++400), and `msg` is what a client that ignores `quick` will display — leaving it
++empty puts an empty bubble in the thread.
++
+ ## Optional: faster move notifications
+ 
+ By default, opponents' moves show up through periodic polling. Everything below is **disabled by default** and entirely optional — without these lines in `localconf.php`, the behavior is unchanged.
