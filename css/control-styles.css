@@ -298,3 +298,11 @@ html,body {
     font-size: 14px;
     border-radius: 0 0px 5px 5px;
 }
+
+/* Motif affiche quand la partie interdit la reprise de coup : discret, mais
+   present -- un bouton qui manque sans explication passe pour une panne. */
+.takeback-forbidden {
+    font-size: 12px;
+    font-style: italic;
+    margin: 4px 0;
+}

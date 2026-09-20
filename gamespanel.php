@@ -41,6 +41,12 @@
             <div id="gd-buttons-rules" class="gd-button" onClick="javascript:openRules();"><span class='t'>Rules</span></div>
             <div id="gd-buttons-match" class="gd-button" onClick="javascript:createMatch();"><span class='t'>Create match</span> <img class="button-svg-pic" src="i/users-connected.svg"></div>
         </div>
+        <!-- Reglage de la PARTIE a creer, transmis dans les deux liens (tb=0/1).
+             Decoche par defaut : une partie a distance ne permet pas de
+             reprendre un coup tant que son createur ne l'a pas voulu. -->
+        <div id="gd-match-options">
+            <label><input type="checkbox" id="allow-takeback"> <span class='t'>Allow taking back moves</span></label>
+        </div>
         <div id="match-area">
             <div><span class='t'>Link for player A : </span></a><input class="player-link" id="linka" size="70" spellcheck="false" readonly="" type="text" value="link for player a"> <a id="blinka" href="javascript:copy2Clipboard('a');"><span class='t'>Copy</span></a> • <a id="goplaya" target="_blank" href=""><span class='t'>Open</span></a></div>
             <div><span class='t'>Link for player B : </span></a><input class="player-link" id="linkb" size="70" spellcheck="false" readonly="" type="text" value="link for player b"> <a id="blinkb" href="javascript:copy2Clipboard('b');"><span class='t'>Copy</span></a> • <a id="goplayb" target="_blank" href=""><span class='t'>Open</span></a></div>

@@ -80,6 +80,9 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 				     n'a ete joue -- annuler le neant n'a pas de sens. -->
 				<button id="takeback" style="display: none;"><span class="t">Take back last move</span></button>
 				<button id="restart" style="display: none;"><span class="t">Restart match</span></button>
+				<!-- Un bouton qui disparait sans motif se lit comme une panne : quand
+				     la partie interdit la reprise, on le dit. -->
+				<p id="takeback-forbidden" class="takeback-forbidden" style="display: none;"><span class="t">This match does not allow taking back moves.</span></p>
 				<button id="replaylastmove" style="display: none;"><span class="t">Replay last move</span></button>
 				<button id="fullscreen" style="display: none;"><span class="t">Full screen</span></button>
 				<button id="save"><span class="t">Save</span></button>
@@ -171,6 +174,13 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 		if ($_GET["player"] == "b"){
 			echo("iamPlayer = Jocly.PLAYER_B;");
 		}
+	}
+	// Reprise de coup, telle que l'hote l'a reglee a la creation du match
+	// (tb=1 / tb=0). Seules ces deux valeurs sont reconnues ; absente, la
+	// variable reste indefinie et control.js applique la regle par defaut.
+	// Le FICHIER de la partie, s'il porte le reglage, l'emporte ensuite.
+	if (isset($_GET["tb"]) && ($_GET["tb"] === "0" || $_GET["tb"] === "1")){
+		echo("matchDetails.allowTakeback = ".($_GET["tb"] === "1" ? "true" : "false")."; ");
 	}
 	if (safeParam("lg")){
 		echo("lg = \"".$_GET["lg"]."\";");

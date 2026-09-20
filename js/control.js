@@ -12,7 +12,10 @@ function NotifyWinner(winner) {
 
 
     var curId = matchDetails.matchId.split("-");
-    var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+"&player=";
+    // La revanche garde le reglage de reprise de la partie qui s'acheve.
+    var tb = (typeof matchDetails.allowTakeback === "boolean")
+        ? "&tb=" + (matchDetails.allowTakeback ? "1" : "0") : "";
+    var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+tb+"&player=";
 
     // propose new game
     var html = t("End of game")+" : "+"<div class='winner-message'>"+text+"</div>";
@@ -42,6 +45,34 @@ var nextMoveCounter = 0 ;
 // retour arriere une seconde, puis le coup revenait. C'est le meme piege que
 // mogichex a documente, d'ou son indicateur `aborting`.
 var takingBack = false;
+
+// REPRISE DE COUP : un reglage de la PARTIE, pose par celui qui l'a creee.
+//
+// Il arrive par le lien (tb=0/1, voir index.php) puis par le fichier, qui
+// fait foi : le fichier est le meme pour les deux joueurs, il survit a un
+// rechargement et a un lien tronque, alors qu'un lien a pu etre retouche.
+// matchDetails.allowTakeback porte la valeur connue, et part dans chaque
+// sauvegarde -- sans quoi notre premiere ecriture effacerait le choix de
+// l'hote, matchDetails etant reecrit en entier.
+//
+// ABSENT = AUTORISE : c'est le comportement de toutes les parties creees
+// avant ce reglage, et le seul qui ne fasse rien regresser.
+function takebackAllowed(){
+    return matchDetails.allowTakeback !== false;
+}
+
+// Boutons de reprise : possibles si la partie l'autorise, qu'un coup a ete
+// joue, ET que c'est notre tour (voir NextMove pour cette derniere
+// condition, qui ne vient pas du reglage mais de la boucle de sondage).
+var myTurnNow = false;
+function refreshTakebackButtons(match){
+    $("#takeback-forbidden").toggle(!takebackAllowed());
+    return match.getPlayedMoves().then((moves) => {
+        var possible = myTurnNow && moves.length > 0 && takebackAllowed();
+        $("#takeback").toggle(possible);
+        $("#restart").toggle(possible);
+    });
+}
 
 var reloadCounter = 0 ;
 function checkIfOtherUserPlayed(delay) {
@@ -95,12 +126,8 @@ function RunMatch(match, progressBar) {
                 // Pendant NOTRE tour, c'est l'inverse : l'autre attend, donc
                 // il sonde, donc il verra. Le bouton est donc masque le reste
                 // du temps plutot qu'offert et silencieusement sans effet.
-                var monTour = (player == iamPlayer);
-                match.getPlayedMoves().then((moves) => {
-                    var possible = monTour && moves.length > 0;
-                    $("#takeback").toggle(possible);
-                    $("#restart").toggle(possible);
-                });
+                myTurnNow = (player == iamPlayer);
+                refreshTakebackButtons(match);
                 if (player == iamPlayer){
                     $("#replaylastmove").attr('disabled', false);
                     $("#game-status").addClass("iamPlaying");
@@ -541,6 +568,15 @@ function loadMatchFromID(gameid,match,waitMode){
             }
             if (!data || !data.matchDetails || !data.matchdata) { return; }
 
+            // Le fichier fait foi sur le lien pour la reprise de coup. Un
+            // fichier qui ne dit rien (ecrit par un client anterieur) ne
+            // change rien : on garde ce que le lien annoncait.
+            if (typeof data.matchDetails.allowTakeback === "boolean"
+                    && data.matchDetails.allowTakeback !== matchDetails.allowTakeback) {
+                matchDetails.allowTakeback = data.matchDetails.allowTakeback;
+                refreshTakebackButtons(match);
+            }
+
             if (data.matchDetails.nbTurns > matchDetails.nbTurns){
                 matchDetails.nbTurns = data.matchDetails.nbTurns;
                 
@@ -884,6 +920,8 @@ $(document).ready(function () {
                 // fois : c'est composable, et cela ne suppose rien de
                 // l'alternance.
                 function rollbackTo(target, message){
+                    // Garde de fond : les boutons sont deja masques dans ce cas.
+                    if (!takebackAllowed()) return Promise.resolve();
                     takingBack = true;
                     // abortUserTurn() AVANT rollback(), jamais l'inverse : la
                     // boucle de jeu attend peut-etre une saisie sur la
@@ -1005,6 +1043,8 @@ var translations = {
     "You restarted the match." : {fr : "Vous avez recommencé la partie."},
     "Your opponent took back the last move." : {fr : "Votre adversaire a annulé le dernier coup."},
     "Your opponent restarted the match." : {fr : "Votre adversaire a recommencé la partie."},
+    "This match does not allow taking back moves." :
+        {fr : "Cette partie n'autorise pas la reprise de coup."},
     "My name" : {fr: "Mon nom"},
     "Chat" : {fr: "Clavardage"},
     "End of game" : {fr : "Fin de partie"},

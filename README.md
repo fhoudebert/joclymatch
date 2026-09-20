@@ -8,6 +8,7 @@ A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/
 - **Play with a friend** — create a match and get two links: one for player A, one for player B. Send the other link to your opponent and play at your own pace.
 - **Read the rules** — every game comes with its rules, available directly in the interface.
 - **Chat** — a simple in-match chat between the two players.
+- **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, each player can take back on their own turn, and the opponent's board follows.
 - **Save / snapshot** — export a match as a JSON file, or take a picture of the board.
 
 ## Design choices (features or limitations, you decide)
@@ -107,6 +108,25 @@ clients. A message with no textual `msg` is skipped rather than shown as
 `undefined`. A sealed body (`enc:1`) is shown as a padlock and an explanation,
 never as raw base64 — a message you cannot read is still worth knowing about. A
 missing `pseudo` falls back to "Player A" / "Player B".
+
+**Taking back moves.** Whether a match allows it is a setting of the *match*,
+not of a player. It is announced by the link (`tb=1` / `tb=0`, in the query
+string) and then carried by the match file as `matchDetails.allowTakeback`
+(boolean). The file wins over the link: it is the same for both players and
+survives a reload or a truncated link. **Absent means allowed** — that is how
+every match created before the setting behaves. Both clients rebuild
+`matchDetails` on each save, so a client writing the other end must **copy
+`allowTakeback` back** into every save, or its first save erases the host's
+choice. A takeback is a save with a *lower* `nbTurns` and the full state: load
+it as is, never replay its last move.
+
+A takeback is only offered on your own turn: this client polls the relay only
+while it waits for the opponent, so a takeback sent during its own turn would
+never be seen, and its next move would overwrite it.
+
+**Known limit.** A server still serving an older `js/control.js` ignores the
+setting: its player can take back even in a match created with the box
+unchecked. The setting is only enforceable by up-to-date clients.
 
 Two things are worth knowing if you write the other end: a message must be **one
 line** (the server reads the file line by line and rejects `\r` or `\n` with a

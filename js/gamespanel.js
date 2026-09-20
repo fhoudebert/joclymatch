@@ -81,24 +81,42 @@ function copy2Clipboard(player) {
 
 
 
+// Identifiant du match dont les liens sont affiches : cocher ou decocher la
+// reprise apres coup reconstruit les MEMES liens, sans changer de match.
+var currentMid = "";
+
+function showMatchLinks(){
+    // tb est TOUJOURS ecrit, 1 comme 0 : un lien qui ne dit rien est celui
+    // d'un client ancien, pas un choix.
+    var tb = $("#allow-takeback").prop("checked") ? "1" : "0";
+    var link=matchRootURL+"index.php?game="+selectedGame+"&mid="+currentMid+"&tb="+tb;
+    $("#linka").attr("value",link+"&player=a");
+    $("#linkb").attr("value",link+"&player=b");
+    $("#goplaya").attr("href",link+"&player=a");
+    $("#goplayb").attr("href",link+"&player=b");
+}
+
 function createMatch(){
     if(selectedGame == ""){
         alert(t("Please select a game first"));
     }else{        
         console.log("creating match");
         $("#match-area").show();
-        var mid = Date.now()+"-"+makeid(14);
-        var link=matchRootURL+"index.php?game="+selectedGame+"&mid="+mid;
-        $("#linka").attr("value",link+"&player=a");
-        $("#linkb").attr("value",link+"&player=b");
-        $("#goplaya").attr("href",link+"&player=a");
-        $("#goplayb").attr("href",link+"&player=b");
+        currentMid = Date.now()+"-"+makeid(14);
+        showMatchLinks();
     }
 }
+
+$(function(){
+    $("#allow-takeback").on("change", function(){
+        if (currentMid.length && $("#match-area").is(":visible")) showMatchLinks();
+    });
+});
 
 function selectGame(name){
     // clear and close match area if open
     $("#match-area").hide();
+    currentMid = "";
     $("#linka").attr("value","");
     $("#linkb").attr("value","");
 
@@ -257,6 +275,7 @@ var translations = {
     "Play Game" : {fr : "Jouer seul"},
     "Rules" : {fr : "Règles"},
     "Create match" : {fr : "Créer match"},
+    "Allow taking back moves" : {fr : "Autoriser la reprise de coup"},
     "Link for player A : " : {fr : "Lien pour joueur A : "},
     "Link for player B : " : {fr : "Lien pour joueur B : "},
     "Copy" : {fr : "Copier"},

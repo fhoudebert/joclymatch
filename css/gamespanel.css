@@ -132,3 +132,9 @@ input[type=text] {
     margin: 0 auto;
 }
 
+
+/* Reglage de la partie a creer, a cote de « Creer match ». */
+#gd-match-options {
+    font-size: 12px;
+    margin: 4px 0;
+}
