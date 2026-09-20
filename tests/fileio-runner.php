@@ -1,7 +1,7 @@
 <?php
 // Execute UNE requete contre fileio.php et ecrit sa reponse sur la sortie.
 //
-//   php tests/fileio-runner.php '<json POST>' '<repertoire>' [ttl] [maxSave] [maxChat]
+//   php tests/fileio-runner.php '<json POST>' '<repertoire>' [ttl] [maxSave] [maxChat] [trim]
 //
 // fileio.php appelle exit() : on ne peut pas l'inclure deux fois dans le meme
 // processus. Chaque requete passe donc par un sous-processus, comme le fait
@@ -27,7 +27,10 @@ $conf = $dir . 'localconf.php';
         . '$savePath = ' . var_export($dir, true) . ";\n"
         . '$saveTTL = ' . (isset($argv[3]) ? (int) $argv[3] : 2592000) . ";\n"
         . '$saveMaxBytes = ' . (isset($argv[4]) ? (int) $argv[4] : 1048576) . ";\n"
-        . '$chatMaxBytes = ' . (isset($argv[5]) ? (int) $argv[5] : 262144) . ";\n");
+        . '$chatMaxBytes = ' . (isset($argv[5]) ? (int) $argv[5] : 262144) . ";\n"
+        // Retrait des plus anciens messages quand le fil est plein : c'est le
+        // comportement par defaut, et une verification le desactive.
+        . '$chatTrimOldest = ' . (isset($argv[6]) && $argv[6] === '0' ? 'false' : 'true') . ";\n");
 }
 
 chdir($dir);

@@ -63,6 +63,20 @@ $saveMaxBytes  = 1048576;          // 1 MB
 // Largest chat log for one match. The file is appended to, so without a
 // bound it grows for as long as the game lasts.
 $chatMaxBytes  = 262144;           // 256 KB
+
+// Once that bound is reached, the OLDEST messages make room for the new
+// ones instead of the log closing. A correspondence game lasts weeks, so
+// the bound is a normal end of the file, not a rare case — and a
+// conversation frozen mid-game is worse than a forgotten beginning.
+// Clients keep on screen what they have already received, so nothing
+// disappears under a reader's eyes; what is lost is what someone opening
+// the match *now* would see. Set to false to keep the old refusal.
+$chatTrimOldest = true;
+
+// How far down to trim when it happens. Going just under the bound would
+// rewrite the whole file on every message; a quarter at a time means one
+// rewrite per few hundred messages.
+$chatTrimTo    = 196608;           // 192 KB (75% of $chatMaxBytes)
 ```
 
 The clean-up is opportunistic and bounded — there is no cron on shared
@@ -74,6 +88,13 @@ POST gameioaction=drop  gameid=<id>     -> {"ok":true}
 ```
 
 which removes the match file and its chat log together.
+
+Saving a chat message answers `{"ok":true,"trimmed":n}`, where `n` counts the
+oldest messages dropped to make room for this one — zero almost always. Two
+refusals remain, and they do not call for the same reaction: **413**
+`chat message too large` is about *that* message (it is bigger than the whole
+log, so no trimming would help — shorten it), while **413** `chat log full`
+only comes from a relay where `$chatTrimOldest` is off.
 
 ## Other clients
 

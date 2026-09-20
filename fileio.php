@@ -31,6 +31,36 @@ if (!isset($saveMaxBytes)) {
 if (!isset($chatMaxBytes)) {
     $chatMaxBytes = 262144;
 }
+/*
+ * ET UNE FOIS PLEIN ? ON FAIT DE LA PLACE.
+ *
+ * Le fil etait alors FERME : tout message suivant recevait un 413, et les deux
+ * joueurs se retrouvaient avec une conversation figee au milieu d'une partie
+ * qui, elle, continuait. Pour une partie par correspondance qui dure des
+ * semaines, c'est la fin normale du fichier, pas un cas rare.
+ *
+ * Les messages les plus anciens sont donc retires pour loger les nouveaux. La
+ * conversation vivante compte plus que son debut, et le debut n'est pas perdu
+ * pour autant chez ceux qui l'ont deja lu : les clients gardent a l'ecran ce
+ * qu'ils ont recu (joclymatch n'enleve jamais un message de son panneau,
+ * Tabulon garde le fil qu'il a vu passer). Ce qui disparait, c'est ce que
+ * verrait quelqu'un qui arrive apres.
+ *
+ * $chatTrimOldest = false retablit l'ancien refus, pour un hebergement qui
+ * prefererait archiver.
+ */
+if (!isset($chatTrimOldest)) {
+    $chatTrimOldest = true;
+}
+/*
+ * On ne se contente pas de descendre JUSTE sous la borne : le fichier entier
+ * serait alors reecrit a chaque message des qu'il est plein. On retire un
+ * quart d'un coup, et la reecriture n'a lieu qu'une fois par quart -- pour un
+ * fil de 256 Ko, une fois toutes les quelques centaines de messages.
+ */
+if (!isset($chatTrimTo)) {
+    $chatTrimTo = (int) ($chatMaxBytes * 0.75);
+}
 
 // DIALECTE match.php (mogichex) : action / mid / data.
 //
@@ -248,27 +278,95 @@ if ( isset($_POST['chatioaction']) && isset($_POST['gameid'])){
             echo json_encode(array("error" => "chat message must be a single line"));
             exit;
         }
-        // Le fichier est en ajout : sans borne il grossit tant que la partie
-        // dure. On refuse le message plutot que de tronquer le fil.
-        clearstatcache(true, $fn);
-        $current = file_exists($fn) ? filesize($fn) : 0;
-        if ($current + strlen($_POST['chatmsg']) + 1 > $chatMaxBytes) {
+        /*
+         * UN MESSAGE PLUS GROS QUE LE FIL ENTIER ne rentrera jamais, quoi
+         * qu'on retire : c'est le seul refus qui reste, et il porte sur CE
+         * message, pas sur le fil. Les deux cas se distinguent par le
+         * message d'erreur, parce qu'ils n'appellent pas la meme reaction --
+         * raccourcir, ou rien.
+         */
+        $line = $_POST['chatmsg'] . "\n";
+        if (strlen($line) > $chatMaxBytes) {
             http_response_code(413);
             header('Content-Type: application/json');
-            echo json_encode(array("error" => "chat log full"));
+            echo json_encode(array("error" => "chat message too large"));
             exit;
         }
-        $fp = @fopen($fn,"at");
+        /*
+         * TOUT SE FAIT SOUS UN VERROU EXCLUSIF, et c'est nouveau.
+         *
+         * L'ajout seul pouvait s'en passer : une ecriture courte en mode "a"
+         * est atomique. Retirer les premiers messages ne l'est pas -- c'est
+         * lire, recomposer, reecrire -- et un ajout de l'adversaire tombant
+         * au milieu serait perdu. Le meme verrou couvre donc les deux, et la
+         * lecture du fil ne le prend pas : elle ne fait que lire.
+         *
+         * "c+" ouvre en lecture-ecriture sans tronquer et cree le fichier au
+         * besoin : c'est ce qui permet de prendre le verrou AVANT de decider
+         * quoi que ce soit.
+         */
+        $fp = @fopen($fn, "c+");
         if ($fp === false) {
             http_response_code(500);
             header('Content-Type: application/json');
             echo json_encode(array("error" => "chat save failed"));
-        } else {
-            fputs($fp,$_POST['chatmsg']."\n");
-            fclose($fp);
-            header('Content-Type: application/json');
-            echo json_encode(array("ok" => true));
+            exit;
         }
+        flock($fp, LOCK_EX);
+        $stat = fstat($fp);
+        $size = $stat ? $stat['size'] : 0;
+        $dropped = 0;
+        if ($size + strlen($line) > $chatMaxBytes) {
+            if (!$chatTrimOldest) {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                http_response_code(413);
+                header('Content-Type: application/json');
+                echo json_encode(array("error" => "chat log full"));
+                exit;
+            }
+            // La cible : assez bas pour loger le nouveau message, et d'un
+            // quart au moins pour ne pas recommencer au message suivant.
+            $target = $chatTrimTo;
+            if ($target > $chatMaxBytes - strlen($line)) {
+                $target = $chatMaxBytes - strlen($line);
+            }
+            if ($target < 0) {
+                $target = 0;
+            }
+            rewind($fp);
+            $content = stream_get_contents($fp);
+            $lines = array();
+            foreach (explode("\n", $content) as $one) {
+                if ($one !== '') {
+                    $lines[] = $one;
+                }
+            }
+            // On retire par le DEBUT, un message a la fois, jusqu'a tenir
+            // sous la cible. Un message est une ligne : le fil reste lisible
+            // a tout moment, jamais coupe au milieu d'un JSON.
+            $kept = $size;
+            while ($kept > $target && count($lines) > 0) {
+                $gone = array_shift($lines);
+                $kept -= strlen($gone) + 1;
+                $dropped++;
+            }
+            $rewritten = count($lines) ? implode("\n", $lines) . "\n" : '';
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, $rewritten);
+        }
+        fseek($fp, 0, SEEK_END);
+        fwrite($fp, $line);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        header('Content-Type: application/json');
+        // `trimmed` : combien de messages ont ete retires pour loger celui-ci.
+        // Un client qui l'ignore ne perd rien ; celui qui le lit peut le dire
+        // a son joueur, qui verrait sinon le debut du fil disparaitre sans
+        // explication.
+        echo json_encode(array("ok" => true, "trimmed" => $dropped));
     }
     if(($_POST['chatioaction']=='load')){
         header('Content-Type: application/json');
