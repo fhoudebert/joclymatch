@@ -38,12 +38,13 @@ var nextMoveCounter = 0 ;
 
 // ANNULATION EN COURS : la boucle de jeu ne doit alors RIEN sauvegarder.
 //
-// `abortUserTurn()` fait ABOUTIR la promesse de `userTurn()` en attente — elle
-// ne rejette pas. La suite de la chaine (« un coup vient d'etre joue, on
-// compte et on sauvegarde ») s'executait donc au milieu de l'annulation, et
-// reecrivait le fichier avec la position d'AVANT : l'adversaire voyait le
-// retour arriere une seconde, puis le coup revenait. C'est le meme piege que
-// mogichex a documente, d'ou son indicateur `aborting`.
+// Dans jocly2 (src/core/jocly.core.js), `abortUserTurn()` fait REJETER la
+// promesse de `userTurn()` en attente (« User input aborted ») : la chaine part
+// alors dans le .catch de NextMove, et rien n'est sauvegarde. Cet indicateur
+// est une GARDE DE FOND : si la suite « un coup vient d'etre joue, on compte
+// et on sauvegarde » venait a s'executer pendant l'annulation (autre version
+// de jocly), elle reecrirait le fichier avec la position d'AVANT et
+// l'adversaire verrait le coup revenir. Meme piege que mogichex (`aborting`).
 var takingBack = false;
 
 // REPRISE DE COUP : un reglage de la PARTIE, pose par celui qui l'a creee.
@@ -61,16 +62,20 @@ function takebackAllowed(){
     return matchDetails.allowTakeback !== false;
 }
 
-// Boutons de reprise : possibles si la partie l'autorise, qu'un coup a ete
-// joue, ET que c'est notre tour (voir NextMove pour cette derniere
-// condition, qui ne vient pas du reglage mais de la boucle de sondage).
+// Boutons de reprise : possibles si la partie l'autorise ET que c'est notre
+// tour (voir NextMove pour cette derniere condition, qui ne vient pas du
+// reglage mais de la boucle de sondage).
+//
+// « Annuler » demande DEUX coups joues : a notre tour, le dernier coup est
+// celui de l'adversaire ; notre propre dernier coup est l'avant-dernier.
+// Avec un seul coup (le premier coup de A, vu par B), il n'y a rien a nous.
 var myTurnNow = false;
 function refreshTakebackButtons(match){
     $("#takeback-forbidden").toggle(!takebackAllowed());
     return match.getPlayedMoves().then((moves) => {
-        var possible = myTurnNow && moves.length > 0 && takebackAllowed();
-        $("#takeback").toggle(possible);
-        $("#restart").toggle(possible);
+        var allowed = myTurnNow && takebackAllowed();
+        $("#takeback").toggle(allowed && moves.length >= 2);
+        $("#restart").toggle(allowed && moves.length > 0);
     });
 }
 
@@ -600,7 +605,7 @@ function loadMatchFromID(gameid,match,waitMode){
                 match.load(data.matchdata);
                 informUserInChatroom(data.matchDetails.nbTurns == 0
                     ? t("Your opponent restarted the match.")
-                    : t("Your opponent took back the last move."));
+                    : t("Your opponent took back a move."));
             }else{
                 // load match 
                 match.load(data.matchdata) ;
@@ -905,20 +910,19 @@ $(document).ready(function () {
 					match.viewControl("setPanorama",options);
                 });
 
-                // ANNULER LE DERNIER COUP, UN A LA FOIS.
+                // ANNULER NOTRE DERNIER COUP, ET LA REPONSE DE L'ADVERSAIRE.
                 //
-                // L'ancienne version deduisait « le dernier coup du joueur »
-                // d'une arithmetique de parite sur $("#mode").val(). Deux
-                // problemes : ce select n'existe pas dans cette page (mode
-                // valait toujours undefined, donc lastUserMove restait a -1 et
-                // le bouton n'aurait RIEN fait), et la parite suppose que les
-                // camps alternent strictement -- faux aux dames (prise
-                // multiple) et dans tout jeu a coups doubles.
+                // Le bouton n'est offert qu'a notre tour (voir NextMove) : le
+                // dernier coup joue est donc celui de l'ADVERSAIRE. N'en
+                // defaire qu'un annulait SON coup et lui rendait la main --
+                // et comme le bouton disparait des que ce n'est plus notre
+                // tour, on ne pouvait jamais atteindre le sien propre.
                 //
-                // On annule donc UN coup, celui qui vient d'etre joue, quel
-                // que soit son auteur. Pour en annuler deux, on appuie deux
-                // fois : c'est composable, et cela ne suppose rien de
-                // l'alternance.
+                // On recule donc de deux coups (meme regle que mogichex et
+                // Tabulon), PUIS on verifie a qui c'est le tour : tous les
+                // jeux n'alternent pas strictement, et getPlayedMoves() rend
+                // des coups bruts, sans camp. Si ce n'est pas encore a nous,
+                // on recule d'un cran de plus. Cas normal : un rollback.
                 function rollbackTo(target, message){
                     // Garde de fond : les boutons sont deja masques dans ce cas.
                     if (!takebackAllowed()) return Promise.resolve();
@@ -930,12 +934,22 @@ $(document).ready(function () {
                         .then( () => match.abortMachineSearch() )
                         .then( () => match.rollback(target) )
                         .then( () => {
+                            if (target <= 0) return target;
+                            return match.getTurn().then( (player) => {
+                                if (player == iamPlayer) return target;
+                                return match.rollback(target - 1).then( () => target - 1 );
+                            });
+                        })
+                        .then( (reached) => {
                             // nbTurns est pose AVANT la sauvegarde : il part
                             // dans le meme fichier, et c'est lui que le
                             // sondage de l'adversaire compare.
-                            matchDetails.nbTurns = target;
+                            matchDetails.nbTurns = reached;
                             saveGameIfNecessary(match);
                             informUserInChatroom(message);
+                        })
+                        .catch( (e) => console.warn("Take back failed:", e) )
+                        .then( () => {
                             takingBack = false;
                             RunMatch(match,progressBar);
                         });
@@ -944,13 +958,13 @@ $(document).ready(function () {
                 $("#takeback").on("click",function() {
                     match.getPlayedMoves()
                         .then( (playedMoves) => {
-                            if (playedMoves.length < 1) return;
+                            if (playedMoves.length < 2) return;
                             // Le plateau de l'ADVERSAIRE va changer sous ses
                             // yeux : on demande confirmation plutot que de le
                             // faire d'un clic distrait.
-                            if (!window.confirm(t("Take back the last move? Your opponent's board will change too.")))
+                            if (!window.confirm(t("Take back your last move? Your opponent's reply is undone too, and their board will change.")))
                                 return;
-                            rollbackTo(playedMoves.length - 1, t("You took back the last move."));
+                            rollbackTo(playedMoves.length - 2, t("You took back your last move."));
                         });
                 });
 
@@ -1033,15 +1047,15 @@ var translations = {
     "Encrypted message — this client has no key to read it." :
         {fr : "Message chiffré — ce client n'a pas la clé pour le lire."},
     "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"},
-    "Take back last move" : {fr : "Annuler le dernier coup"},
+    "Take back my last move" : {fr : "Reprendre mon dernier coup"},
     "Restart match" : {fr : "Recommencer la partie"},
-    "Take back the last move? Your opponent's board will change too." :
-        {fr : "Annuler le dernier coup ? Le plateau de votre adversaire changera aussi."},
+    "Take back your last move? Your opponent's reply is undone too, and their board will change." :
+        {fr : "Reprendre votre dernier coup ? La réponse de votre adversaire est annulée aussi, et son plateau changera."},
     "Restart this match from the beginning?" :
         {fr : "Recommencer cette partie depuis le début ?"},
-    "You took back the last move." : {fr : "Vous avez annulé le dernier coup."},
+    "You took back your last move." : {fr : "Vous avez repris votre dernier coup."},
     "You restarted the match." : {fr : "Vous avez recommencé la partie."},
-    "Your opponent took back the last move." : {fr : "Votre adversaire a annulé le dernier coup."},
+    "Your opponent took back a move." : {fr : "Votre adversaire a repris un coup."},
     "Your opponent restarted the match." : {fr : "Votre adversaire a recommencé la partie."},
     "This match does not allow taking back moves." :
         {fr : "Cette partie n'autorise pas la reprise de coup."},

@@ -78,7 +78,7 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 				     page : les gestionnaires etaient poses sur des elements
 				     absents, donc du code mort. Ils sont caches tant qu'aucun coup
 				     n'a ete joue -- annuler le neant n'a pas de sens. -->
-				<button id="takeback" style="display: none;"><span class="t">Take back last move</span></button>
+				<button id="takeback" style="display: none;"><span class="t">Take back my last move</span></button>
 				<button id="restart" style="display: none;"><span class="t">Restart match</span></button>
 				<!-- Un bouton qui disparait sans motif se lit comme une panne : quand
 				     la partie interdit la reprise, on le dit. -->
