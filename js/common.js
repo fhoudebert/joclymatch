@@ -77,6 +77,38 @@ function escapeHtml(s){
 // Ainsi un jeu qui fournit "summary": "texte" continue de s'afficher tel
 // quel, et un jeu qui fournit un objet s'affiche dans la langue de
 // l'interface. Aucun jeu existant n'est a modifier.
+/**
+ * Titre d'un jeu, dans la langue courante.
+ *
+ * JOCLY EN DECLARE DE DEUX FACONS, et n'en lire qu'une coutait cher :
+ *
+ *   - `title-en`, une chaine anglaise : la plupart des jeux ;
+ *   - `title`, un objet localise : 26 jeux, dont SEIZE de chessbase, et
+ *     `classic-chess` en fait partie.
+ *
+ * Ces 26-la n'ont PAS de `title-en`. Le lire seul rendait donc `undefined`,
+ * et comme le resultat etait concatene sans controle, le bandeau du jeu
+ * selectionne affichait litteralement « undefined » sur les echecs
+ * classiques, l'infobulle de la vignette disparaissait, et le message
+ * d'absence de regles annoncait « no rules available for undefined ».
+ *
+ * L'objet localise passe en PREMIER : quand un jeu porte les deux, le plus
+ * riche gagne — et joclymatch recupere au passage les titres francais que
+ * jocly porte deja, sans en ecrire un seul.
+ *
+ * @param {object} model  config.model du jeu
+ * @param {string} [fallback]  employe si le jeu ne declare aucun titre ;
+ *   l'identifiant du jeu fait un repli laid mais jamais vide.
+ */
+function localizedTitle(model, fallback){
+    if (!model) return fallback || "";
+    var t = localizedText(model.title);
+    if (t.length > 0) return t;
+    if (typeof model["title-en"] == "string" && model["title-en"].length > 0)
+        return model["title-en"];
+    return fallback || "";
+}
+
 function localizedText(value){
     if (value === undefined || value === null)
         return "";

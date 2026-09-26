@@ -8,6 +8,7 @@ A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/
 - **Play with a friend** — create a match and get two links: one for player A, one for player B. Send the other link to your opponent and play at your own pace.
 - **Read the rules** — every game comes with its rules, available directly in the interface.
 - **Chat** — a simple in-match chat between the two players.
+- **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, a player can, on their own turn, take back their last move together with the opponent's reply, and the opponent's board follows.
 - **Save / snapshot** — export a match as a JSON file, or take a picture of the board.
 
 ## Design choices (features or limitations, you decide)
@@ -62,6 +63,20 @@ $saveMaxBytes  = 1048576;          // 1 MB
 // Largest chat log for one match. The file is appended to, so without a
 // bound it grows for as long as the game lasts.
 $chatMaxBytes  = 262144;           // 256 KB
+
+// Once that bound is reached, the OLDEST messages make room for the new
+// ones instead of the log closing. A correspondence game lasts weeks, so
+// the bound is a normal end of the file, not a rare case — and a
+// conversation frozen mid-game is worse than a forgotten beginning.
+// Clients keep on screen what they have already received, so nothing
+// disappears under a reader's eyes; what is lost is what someone opening
+// the match *now* would see. Set to false to keep the old refusal.
+$chatTrimOldest = true;
+
+// How far down to trim when it happens. Going just under the bound would
+// rewrite the whole file on every message; a quarter at a time means one
+// rewrite per few hundred messages.
+$chatTrimTo    = 196608;           // 192 KB (75% of $chatMaxBytes)
 ```
 
 The clean-up is opportunistic and bounded — there is no cron on shared
@@ -73,6 +88,76 @@ POST gameioaction=drop  gameid=<id>     -> {"ok":true}
 ```
 
 which removes the match file and its chat log together.
+
+Saving a chat message answers `{"ok":true,"trimmed":n}`, where `n` counts the
+oldest messages dropped to make room for this one — zero almost always. Two
+refusals remain, and they do not call for the same reaction: **413**
+`chat message too large` is about *that* message (it is bigger than the whole
+log, so no trimming would help — shorten it), while **413** `chat log full`
+only comes from a relay where `$chatTrimOldest` is off.
+
+## Other clients
+
+Three applications speak this relay's format — joclymatch, [Tabulon](https://github.com/fhoudebert/tabulon)
+and [mogichex](https://github.com/fhoudebert/mogichex) — so the endpoints accept
+two spellings of the same operations, and the chat renderer tolerates messages
+it did not write. A match lives on ONE relay: a Tabulon player joins a joclymatch
+match here; mogichex ships its own `fileio.php` next to its own match files, so a
+mogichex match is joined from Tabulon, not from this server.
+
+**Two dialects, one behaviour.** `action/mid/data` is translated to
+`gameioaction/gameid/gamedata` before anything else happens, `since` to
+`sinceMtime`, and `X-Match-Mtime` is sent alongside `X-File-Mtime`. The
+translation happens *before* the game-id validation, so neither spelling opens a
+door the other closes. If both are present the original spelling wins, so an
+existing client gets exactly what it got before.
+
+**The chat envelope.** One JSON object per line, `{"data": {…}}`, appended by
+the server:
+
+| Field | Meaning |
+|---|---|
+| `msg` | the text, **or** a base64 seal when `enc` is set |
+| `player` | `1` / `-1`, or `0` for service messages |
+| `pseudo` | display name, free text |
+| `time`, `key` | `time + "-" + key` is the message id |
+| `kind` | optional: `chat` when absent, else `presence`, `nudge`, … |
+| `quick`, `state` | optional: identifiers translated by the reader |
+| `enc` | optional: `1` means `msg` is sealed |
+
+**What this client does with what it does not understand.** An unknown `kind` is
+skipped in silence, so a fourth kind can be added without breaking installed
+clients. A message with no textual `msg` is skipped rather than shown as
+`undefined`. A sealed body (`enc:1`) is shown as a padlock and an explanation,
+never as raw base64 — a message you cannot read is still worth knowing about. A
+missing `pseudo` falls back to "Player A" / "Player B".
+
+**Taking back moves.** Whether a match allows it is a setting of the *match*,
+not of a player. It is announced by the link (`tb=1` / `tb=0`, in the query
+string) and then carried by the match file as `matchDetails.allowTakeback`
+(boolean). The file wins over the link: it is the same for both players and
+survives a reload or a truncated link. **Absent means forbidden**, as in mogichex
+and Tabulon: the other end of such a match may be an older client that does not
+follow a takeback. Receiving a takeback never depends on the setting. Both clients rebuild
+`matchDetails` on each save, so a client writing the other end must **copy
+`allowTakeback` back** into every save, or its first save erases the host's
+choice. A takeback is a save with a *lower* `nbTurns` and the full state: load
+it as is, never replay its last move. `nbTurns` is the number of moves played
+(`getPlayedMoves().length`), not a counter: a takeback from this client lowers it
+by two (the player's own move and the reply).
+
+A takeback is only offered on your own turn: this client polls the relay only
+while it waits for the opponent, so a takeback sent during its own turn would
+never be seen, and its next move would overwrite it.
+
+**Known limit.** A server still serving an older `js/control.js` ignores the
+setting: its player can take back even in a match created with the box
+unchecked. The setting is only enforceable by up-to-date clients.
+
+Two things are worth knowing if you write the other end: a message must be **one
+line** (the server reads the file line by line and rejects `\r` or `\n` with a
+400), and `msg` is what a client that ignores `quick` will display — leaving it
+empty puts an empty bubble in the thread.
 
 ## Optional: faster move notifications
 
@@ -94,7 +179,10 @@ $pushWsUrl = "wss://example.org/push/";
 
 - [jocly2](https://github.com/fhoudebert/jocly2) — the Jocly board game library (games, 2D/3D views, AI)
 - [jcfrog/jocly-simple-match](https://github.com/jcfrog/jocly-simple-match) — the original experiment this project is based on
-- [tabulon](https://github.com/fhoudebert/tabulon) — Tabulon can play remotely with a joclymatch server
+- [tabulon](https://github.com/fhoudebert/tabulon) — desktop application; can play remotely with a joclymatch server
+- [mogichex](https://github.com/fhoudebert/mogichex) — the mobile counterpart (installable web app / Android); same invitation link and chat formats
+
 ## License
 
-AGPL-3.0 (see `package.json`) — Tabulon builds on the Jocly library and JoclyBoard, both AGPL.
+JoclyMatch is free software under the [GNU Affero General Public License v3](LICENSE) or later.
+It loads the Jocly library, itself AGPL-3.0, into its pages.

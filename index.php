@@ -1,3 +1,26 @@
+<?php
+// localconf.php est charge ICI, AVANT toute sortie.
+//
+// IL L'ETAIT APRES : le menu de navigation employait $joclyMatchURL cinq
+// lignes AVANT son require, donc la variable y etait toujours vide et le lien
+// « Panneau des jeux » valait « gamespanel.php » tout court. Il ne marchait
+// que par resolution relative -- c'est-a-dire seulement quand la page est
+// servie depuis le meme repertoire, et pas du tout des qu'une reecriture
+// d'URL ou un chemin different s'en mele.
+//
+// Meme precaution que fileio.php : un localconf.php qui emet un BOM, une
+// ligne vide ou un avertissement n'a pas a l'inserer avant le doctype.
+ob_start();
+require "localconf.php";
+ob_end_clean();
+
+// Base absolue, avec ou sans barre finale dans localconf.php. Le README la
+// demande ; s'en remettre a la bonne volonte du fichier de configuration pour
+// une concatenation, c'est produire « .../joclymatchgamespanel.php » au
+// premier oubli.
+$joclyMatchBase = rtrim(isset($joclyMatchURL) ? $joclyMatchURL : '', '/');
+if ($joclyMatchBase === '') $joclyMatchBase = '.';
+?>
 <!doctype html>
 
 <html lang="en">
@@ -51,6 +74,14 @@
 			<div id="mode-panel" style="display: none;" class="box">
 				<div id="lg-flag"><img id="flagicon" src="i/flags/en.svg"></div>
 				<h3><span class="t">Controls</span></h3>
+				<!-- Ce bouton existait DANS control.js mais pas dans la page : code
+				     mort. Il reste cache tant qu'il n'y a pas deux coups a reprendre.
+				     Pas de « Recommencer » : un match a distance ne se remet pas a
+				     zero d'un clic (meme choix que mogichex). -->
+				<button id="takeback" style="display: none;"><span class="t">Take back my last move</span></button>
+				<!-- Un bouton qui disparait sans motif se lit comme une panne : quand
+				     la partie interdit la reprise, on le dit. -->
+				<p id="takeback-forbidden" class="takeback-forbidden" style="display: none;"><span class="t">This match does not allow taking back moves.</span></p>
 				<button id="replaylastmove" style="display: none;"><span class="t">Replay last move</span></button>
 				<button id="fullscreen" style="display: none;"><span class="t">Full screen</span></button>
 				<button id="save"><span class="t">Save</span></button>
@@ -92,12 +123,17 @@
 				</div>
 			</div>
         </div>
-		<div id="overhead-menu"><a href="<?php echo($joclyMatchURL."gamespanel.php"); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a href="https://github.com/mi-g/jocly" target="_blank"><span class="t">Jocly on Github</span></a></div>
+		<!-- La notice s'ouvre dans un NOUVEL ONGLET : elle remplacait la page de
+		     match, et le retour du navigateur renvoyait au panneau des jeux --
+		     le match etait perdu. C'est la seule facon d'atteindre la notice
+		     depuis une partie, donc le bloc reste ; c'est la navigation qui
+		     etait fautive. L'ancien lien « Jocly on Github » portait deja
+		     target="_blank", pour exactement cette raison. -->
+		<div id="overhead-menu"><a href="<?php echo(htmlspecialchars($joclyMatchBase."/gamespanel.php", ENT_QUOTES)); ?>"><span class="t">All games panel</span></a> • <button id="playa-button" ><span class="t">Play A</span></button> • <button id="playb-button"><span class="t">Play B</span></button> • <a href='javascript:openPanel();'><span class="t">Controls</span></a> (C) • <a href='javascript:openRules();'><span class="t">Rules</span></a> (R) • <a href='javascript:openChat();'><span id="chat-menu" class="t">Chat</span></a> (T) • <a id="info-link" href="doc/html/readthis.html" target="_blank" rel="noopener"><span class="t">About this site</span></a></div>
 
 
     </div>
 
-	<?php require "localconf.php" ?>
     <script src="<?php echo($joclyDistPath);?>"></script>
     <script src="js/jquery-3.7.1.min.js"></script>
 	<script>
@@ -137,6 +173,13 @@
 		if ($_GET["player"] == "b"){
 			echo("iamPlayer = Jocly.PLAYER_B;");
 		}
+	}
+	// Reprise de coup, telle que l'hote l'a reglee a la creation du match
+	// (tb=1 / tb=0). Seules ces deux valeurs sont reconnues ; absente, la
+	// variable reste indefinie et control.js applique la regle par defaut.
+	// Le FICHIER de la partie, s'il porte le reglage, l'emporte ensuite.
+	if (isset($_GET["tb"]) && ($_GET["tb"] === "0" || $_GET["tb"] === "1")){
+		echo("matchDetails.allowTakeback = ".($_GET["tb"] === "1" ? "true" : "false")."; ");
 	}
 	if (safeParam("lg")){
 		echo("lg = \"".$_GET["lg"]."\";");

@@ -12,7 +12,10 @@ function NotifyWinner(winner) {
 
 
     var curId = matchDetails.matchId.split("-");
-    var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+"&player=";
+    // La revanche garde le reglage de reprise de la partie qui s'acheve.
+    var tb = (typeof matchDetails.allowTakeback === "boolean")
+        ? "&tb=" + (matchDetails.allowTakeback ? "1" : "0") : "";
+    var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+tb+"&player=";
 
     // propose new game
     var html = t("End of game")+" : "+"<div class='winner-message'>"+text+"</div>";
@@ -32,6 +35,52 @@ function NotifyWinner(winner) {
  */
 var movePending = null;
 var nextMoveCounter = 0 ;
+
+// ANNULATION EN COURS : la boucle de jeu ne doit alors RIEN sauvegarder.
+//
+// Dans jocly2 (src/core/jocly.core.js), `abortUserTurn()` fait REJETER la
+// promesse de `userTurn()` en attente (« User input aborted ») : la chaine part
+// alors dans le .catch de NextMove, et rien n'est sauvegarde. Cet indicateur
+// est une GARDE DE FOND : si la suite « un coup vient d'etre joue, on compte
+// et on sauvegarde » venait a s'executer pendant l'annulation (autre version
+// de jocly), elle reecrirait le fichier avec la position d'AVANT et
+// l'adversaire verrait le coup revenir. Meme piege que mogichex (`aborting`).
+var takingBack = false;
+
+// REPRISE DE COUP : un reglage de la PARTIE, pose par celui qui l'a creee.
+//
+// Il arrive par le lien (tb=0/1, voir index.php) puis par le fichier, qui
+// fait foi : le fichier est le meme pour les deux joueurs, il survit a un
+// rechargement et a un lien tronque, alors qu'un lien a pu etre retouche.
+// matchDetails.allowTakeback porte la valeur connue, et part dans chaque
+// sauvegarde -- sans quoi notre premiere ecriture effacerait le choix de
+// l'hote, matchDetails etant reecrit en entier.
+//
+// ABSENT = INTERDIT, comme dans mogichex et Tabulon. « Autorise » ne
+// preservait rien : avant ce reglage, le bouton de reprise etait du code mort.
+// Et l'adversaire d'une partie sans reglage peut etre un client anterieur, qui
+// ne suit pas une reprise (il rejouait le dernier coup du fichier) : les deux
+// plateaux divergeraient. Recevoir une reprise, en revanche, ne depend pas de
+// ce reglage -- on suit toujours l'adversaire.
+function takebackAllowed(){
+    return matchDetails.allowTakeback === true;
+}
+
+// Boutons de reprise : possibles si la partie l'autorise ET que c'est notre
+// tour (voir NextMove pour cette derniere condition, qui ne vient pas du
+// reglage mais de la boucle de sondage).
+//
+// « Annuler » demande DEUX coups joues : a notre tour, le dernier coup est
+// celui de l'adversaire ; notre propre dernier coup est l'avant-dernier.
+// Avec un seul coup (le premier coup de A, vu par B), il n'y a rien a nous.
+var myTurnNow = false;
+function refreshTakebackButtons(match){
+    $("#takeback-forbidden").toggle(!takebackAllowed());
+    return match.getPlayedMoves().then((moves) => {
+        var allowed = myTurnNow && takebackAllowed();
+        $("#takeback").toggle(allowed && moves.length >= 2);
+    });
+}
 
 var reloadCounter = 0 ;
 function checkIfOtherUserPlayed(delay) {
@@ -69,6 +118,24 @@ function RunMatch(match, progressBar) {
                 changeFavicon(player==iamPlayer);
                 // display whose turn
                 $("#game-status").text(player==Jocly.PLAYER_A?t("A playing"):t("B playing"));
+                // ANNULER N'EST PROPOSE QUE PENDANT SON PROPRE TOUR, et ce
+                // n'est pas un scrupule de politesse : c'est la seule
+                // situation ou l'adversaire RECEVRA l'annulation.
+                //
+                // La boucle de jeu ne recharge la partie que dans sa branche
+                // « j'attends l'autre » (le `else` ci-dessous). Pendant que
+                // c'est a l'adversaire de jouer, son navigateur est bloque
+                // dans userTurn() et ne sonde PAS le serveur : mesure faite,
+                // zero rechargement. Une annulation envoyee a ce moment-la ne
+                // lui parviendrait jamais — pire, son prochain coup, calcule
+                // sur la position d'avant, ecraserait l'annulation sans que
+                // personne ne s'en apercoive.
+                //
+                // Pendant NOTRE tour, c'est l'inverse : l'autre attend, donc
+                // il sonde, donc il verra. Le bouton est donc masque le reste
+                // du temps plutot qu'offert et silencieusement sans effet.
+                myTurnNow = (player == iamPlayer);
+                refreshTakebackButtons(match);
                 if (player == iamPlayer){
                     $("#replaylastmove").attr('disabled', false);
                     $("#game-status").addClass("iamPlaying");
@@ -84,8 +151,17 @@ function RunMatch(match, progressBar) {
                             // reques user input
                             return match.userTurn()
                         }).then( () => {
-                            matchDetails.nbTurns ++;
-                            saveGameIfNecessary(match);
+                            // Une saisie interrompue n'est pas un coup joue.
+                            if (takingBack) return;
+                            // nbTurns est DEDUIT du nombre de coups plutot
+                            // qu'incremente : c'est la seule valeur que les
+                            // deux clients puissent calculer pareil, et elle
+                            // reste juste apres une annulation. Un compteur
+                            // incremente ne survit pas a un retour arriere.
+                            return match.getPlayedMoves().then((moves) => {
+                                matchDetails.nbTurns = moves.length;
+                                saveGameIfNecessary(match);
+                            });
                         })
                         else {
                             promise = promise.then( () => {                            
@@ -180,6 +256,32 @@ function openChat(){
  * Rules
  */
 var gameFullPath = null ;
+// Configuration du jeu, gardee pour pouvoir RECHARGER les regles quand la
+// langue change. Elles etaient lues une seule fois au demarrage, et toujours
+// en anglais.
+var rulesConfig = null;
+
+/**
+ * Charge les regles dans la langue courante.
+ *
+ * Deux corrections ici. D'abord `p.model.rules.en` etait CODE EN DUR : les
+ * regles francaises existent pour la plupart des jeux (le panneau des jeux les
+ * sert deja, via localizedText) mais la page de partie ne les a jamais
+ * montrees. Ensuite ce meme acces levait une exception sur un jeu sans regles
+ * -- `undefined.en` -- exception avalee par la promesse, donc un volet de
+ * regles vide sans le moindre message.
+ */
+function loadRulesForLanguage(){
+    if (!rulesConfig) return;
+    var rel = localizedText(rulesConfig.model.rules);
+    if (!rel.length){
+        $("#rules").html("<p>"+t("Sorry, no rules available for")+" "
+            + escapeHtml(localizedTitle(rulesConfig.model, matchDetails.gameName))+"</p>");
+        return;
+    }
+    loadRules(rulesConfig.view.fullPath+"/"+rel, rulesConfig.view.fullPath);
+}
+
 function loadRules(rulesPath,fullPath){
     $("#rules").load(rulesPath, null, function(data, status, jqXGR){
         var re = /{GAME}/gi ;
@@ -208,9 +310,32 @@ class ChatMsg{
     }
     setPseudo(pseudo){this.data.pseudo=pseudo}
     getId(){return ""+this.data.time+"-"+this.data.key}
+    /**
+     * Ce message est-il affichable ?
+     *
+     * TOLERANCE AUX AUTRES CLIENTS. Le fichier de chat est partage, et rien
+     * ne garantit que l'autre bout soit joclymatch : Tabulon ecrit des
+     * messages typés (`kind` : presence, relance) qui n'ont PAS de champ
+     * `msg`. Servis a html() tels quels, ils affichaient « undefined » --
+     * exactement le defaut qu'on vient de corriger sur les titres.
+     *
+     * On ignore donc en silence ce qu'on ne sait pas rendre, plutot que de
+     * l'afficher de travers. C'est aussi ce qui permettra d'ajouter un genre
+     * sans casser les clients deja installes.
+     */
+    displayable(){
+        var d = this.data || {};
+        if (typeof d.msg != "string") return false;
+        // `kind` absent = message de discussion ordinaire, la convention
+        // d'avant. Tout autre genre appartient a un client qu'on ne connait
+        // pas encore.
+        if (d.kind !== undefined && d.kind !== "chat") return false;
+        return true;
+    }
     html(){
         var cn = "cm-player-" + ((this.data.player == Jocly.PLAYER_A) ? "a" : "b") ;
-        var pn = (this.data.pseudo.length > 0)?this.data.pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
+        var pseudo = (typeof this.data.pseudo == "string") ? this.data.pseudo : "";
+        var pn = (pseudo.length > 0)?pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
         var d = new Date(this.data.time);
         var id = this.getId();
         // Le contenu du message et le pseudo viennent de l'AUTRE joueur via
@@ -221,6 +346,17 @@ class ChatMsg{
         // code (informUserInChatroom / NotifyWinner) et contiennent des liens
         // HTML voulus : eux seuls restent inseres tels quels, comme avant.
         var body = escapeHtml(this.data.msg);
+
+        // CORPS SCELLE : `enc` marque un message chiffre par son auteur (voir
+        // le format de Tabulon). joclymatch n'a pas la cle, et afficher le
+        // base64 brut serait du bruit illisible que l'utilisateur prendrait
+        // pour un defaut. On montre qu'un message existe et qu'il manque de
+        // quoi le lire -- un trou silencieux dans une conversation serait
+        // pire.
+        if (this.data.enc){
+            cn += " cm-sealed";
+            body = "🔒 " + escapeHtml(t("Encrypted message — this client has no key to read it."));
+        }
 
         // system msgs
         if (this.data.player == 0){
@@ -287,6 +423,7 @@ class ChatData{
                             var m = data.messages[i];
                             var msg = new ChatMsg();
                             msg.loadFromData(m);
+                            if (!msg.displayable()) continue;
                             this.msgs.push(msg);
                             // add it to display if not present
                             var id = "#"+msg.getId();
@@ -439,7 +576,16 @@ function loadMatchFromID(gameid,match,waitMode){
             }
             if (!data || !data.matchDetails || !data.matchdata) { return; }
 
-            if (matchDetails.nbTurns != data.matchDetails.nbTurns){
+            // Le fichier fait foi sur le lien pour la reprise de coup. Un
+            // fichier qui ne dit rien (ecrit par un client anterieur) ne
+            // change rien : on garde ce que le lien annoncait.
+            if (typeof data.matchDetails.allowTakeback === "boolean"
+                    && data.matchDetails.allowTakeback !== matchDetails.allowTakeback) {
+                matchDetails.allowTakeback = data.matchDetails.allowTakeback;
+                refreshTakebackButtons(match);
+            }
+
+            if (data.matchDetails.nbTurns > matchDetails.nbTurns){
                 matchDetails.nbTurns = data.matchDetails.nbTurns;
                 
                 console.log("HE HAS PLAYED!!");
@@ -448,6 +594,21 @@ function loadMatchFromID(gameid,match,waitMode){
                 match.load(data.matchdata).then( () => {
                     return match.playMove(lastOpponentMove);
                 }) ;
+            }else if (data.matchDetails.nbTurns < matchDetails.nbTurns){
+                // L'ADVERSAIRE A ANNULE. Le test etait un simple « different »,
+                // qui envoyait ce cas dans la branche ci-dessus : elle retire
+                // le dernier coup du fichier et le REJOUE, ce qui defaisait
+                // l'annulation d'un cran et animait un coup que personne ne
+                // venait de jouer. On charge donc la position telle quelle.
+                //
+                // Et on le DIT : sans cela le plateau change tout seul, sans
+                // que rien n'explique pourquoi.
+                var recule = matchDetails.nbTurns - data.matchDetails.nbTurns;
+                matchDetails.nbTurns = data.matchDetails.nbTurns;
+                match.load(data.matchdata);
+                informUserInChatroom(data.matchDetails.nbTurns == 0
+                    ? t("Your opponent restarted the match.")
+                    : t("Your opponent took back a move."));
             }else{
                 // load match 
                 match.load(data.matchdata) ;
@@ -477,10 +638,14 @@ function saveData(gameid,gamedata){
  * Window updates
  */
 
-var gameTitle = "";
+// Le MODELE du jeu, pas son titre deja resolu : la langue peut changer en
+// cours de partie (drapeau en haut de page), et un titre fige resterait dans
+// celle du chargement.
+var gameModel = null;
 function updateGameTitle(){
     var playerTxt =  (iamPlayer == Jocly.PLAYER_A) ? t("Player A") : t("Player B");
-    $("#game-title").show().text(gameTitle + " • " + playerTxt); 
+    var titre = localizedTitle(gameModel, matchDetails.gameName);
+    $("#game-title").show().text(titre + " • " + playerTxt); 
     var ps = $("#player-pseudo").val();
     if (ps.length==0) $("#player-pseudo").val((iamPlayer == Jocly.PLAYER_A) ? t("Player A") : t("Player B"));
  
@@ -540,9 +705,8 @@ $(document).ready(function () {
     
     Jocly.getGameConfig(gameName).then((p)=>{
         gameFullPath = p.view.fullPath ;
-        var rulesPath = p.view.fullPath+"/"+p.model.rules.en ;
-        console.log(rulesPath);
-        loadRules(rulesPath,p.view.fullPath);
+        rulesConfig = p;
+        loadRulesForLanguage();
     })
 
     Jocly.createMatch(gameName).then((match) => {
@@ -554,7 +718,7 @@ $(document).ready(function () {
         // get game configuration to setup control UI
         match.getConfig()
             .then( (config) => {
-                gameTitle = config.model["title-en"];
+                gameModel = config.model;
                 updateGameTitle();
                 $("#close-games span").show();
                 $("#game-status").show();
@@ -681,14 +845,6 @@ $(document).ready(function () {
                         }
                     });
                 });
-                $("#restart").on("click",function() {
-                    // restart match from the beginning
-                    match.rollback(0)
-                        .then( () => {
-                            RunMatch(match,progressBar);
-                        });
-                });
-
                 $("#save").on("click",function() {
                     // save match to the file system
                     match.save()
@@ -757,30 +913,69 @@ $(document).ready(function () {
 					match.viewControl("setPanorama",options);
                 });
 
+                // ANNULER NOTRE DERNIER COUP, ET LA REPONSE DE L'ADVERSAIRE.
+                //
+                // Le bouton n'est offert qu'a notre tour (voir NextMove) : le
+                // dernier coup joue est donc celui de l'ADVERSAIRE. N'en
+                // defaire qu'un annulait SON coup et lui rendait la main --
+                // et comme le bouton disparait des que ce n'est plus notre
+                // tour, on ne pouvait jamais atteindre le sien propre.
+                //
+                // On recule donc de deux coups (meme regle que mogichex et
+                // Tabulon), PUIS on verifie a qui c'est le tour : tous les
+                // jeux n'alternent pas strictement, et getPlayedMoves() rend
+                // des coups bruts, sans camp. Si ce n'est pas encore a nous,
+                // on recule d'un cran de plus. Cas normal : un rollback.
+                function rollbackTo(target, message){
+                    // Garde de fond : les boutons sont deja masques dans ce cas.
+                    if (!takebackAllowed()) return Promise.resolve();
+                    takingBack = true;
+                    // abortUserTurn() AVANT rollback(), jamais l'inverse : la
+                    // boucle de jeu attend peut-etre une saisie sur la
+                    // position actuelle, et elle ré-entrerait sur l'ancienne.
+                    return match.abortUserTurn()
+                        .then( () => match.abortMachineSearch() )
+                        .then( () => match.rollback(target) )
+                        .then( () => {
+                            if (target <= 0) return target;
+                            return match.getTurn().then( (player) => {
+                                if (player == iamPlayer) return target;
+                                return match.rollback(target - 1).then( () => target - 1 );
+                            });
+                        })
+                        .then( (reached) => {
+                            // nbTurns est pose AVANT la sauvegarde : il part
+                            // dans le meme fichier, et c'est lui que le
+                            // sondage de l'adversaire compare.
+                            matchDetails.nbTurns = reached;
+                            saveGameIfNecessary(match);
+                            informUserInChatroom(message);
+                        })
+                        .catch( (e) => console.warn("Take back failed:", e) )
+                        .then( () => {
+                            takingBack = false;
+                            RunMatch(match,progressBar);
+                        });
+                }
+
                 $("#takeback").on("click",function() {
                     match.getPlayedMoves()
                         .then( (playedMoves) => {
-                            // we want to go back to the last user move
-                            var mode = $("#mode").val();
-                            var lastUserMove = -1;
-                            if( 
-                                ((playedMoves.length % 2 == 1) && (mode=="self-self" || mode=="self-comp")) ||
-                                ((playedMoves.length % 2 == 0) && (mode=="self-self" || mode=="comp-self"))
-                                )
-                                    lastUserMove = playedMoves.length - 1;
-                            else if( 
-                                ((playedMoves.length % 2 == 1) && (mode=="self-self" || mode=="comp-self")) ||
-                                ((playedMoves.length % 2 == 0) && (mode=="self-self" || mode=="self-comp"))
-                                )
-                                    lastUserMove = playedMoves.length - 2;
-                            if(lastUserMove>=0)
-                                match.rollback(lastUserMove)
-                                    .then( () => {
-                                        RunMatch(match,progressBar);
-                                    });
-                            
+                            if (playedMoves.length < 2) return;
+                            // Le plateau de l'ADVERSAIRE va changer sous ses
+                            // yeux : on demande confirmation plutot que de le
+                            // faire d'un clic distrait.
+                            if (!window.confirm(t("Take back your last move? Your opponent's reply is undone too, and their board will change.")))
+                                return;
+                            rollbackTo(playedMoves.length - 2, t("You took back your last move."));
                         });
                 });
+
+                // PAS DE « RECOMMENCER » dans un match a distance, comme dans
+                // mogichex : effacer toute la partie d'un clic, sur le plateau
+                // de l'adversaire aussi, va bien au-dela d'une reprise de coup.
+                // Un nbTurns a 0 recu d'un autre client reste suivi (voir
+                // loadMatchFromID).
 
                 // yeah, using the fullscreen API is not as easy as it should be
                 var requestFullscreen = area.requestFullscreen || area.webkitRequestFullscreen || 
@@ -851,6 +1046,18 @@ var translations = {
     "Player A" : {fr: "Joueur A"},
     "Player B" : {fr: "Joueur B"},
     "Replay last move" : {fr: "Rejouer dernier coup"},
+    "About this site" : {fr : "À propos de ce site"},
+    "Encrypted message — this client has no key to read it." :
+        {fr : "Message chiffré — ce client n'a pas la clé pour le lire."},
+    "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"},
+    "Take back my last move" : {fr : "Reprendre mon dernier coup"},
+    "Take back your last move? Your opponent's reply is undone too, and their board will change." :
+        {fr : "Reprendre votre dernier coup ? La réponse de votre adversaire est annulée aussi, et son plateau changera."},
+    "You took back your last move." : {fr : "Vous avez repris votre dernier coup."},
+    "Your opponent took back a move." : {fr : "Votre adversaire a repris un coup."},
+    "Your opponent restarted the match." : {fr : "Votre adversaire a recommencé la partie."},
+    "This match does not allow taking back moves." :
+        {fr : "Cette partie n'autorise pas la reprise de coup."},
     "My name" : {fr: "Mon nom"},
     "Chat" : {fr: "Clavardage"},
     "End of game" : {fr : "Fin de partie"},
@@ -891,6 +1098,15 @@ function setLanguage(newlg){
         $(".t").each(function(){
             this.innerText = t($(this).attr("en-txt"));
         });
+        // Le titre du jeu vient de jocly, pas de la table de traductions :
+        // la boucle ci-dessus ne le touche pas.
+        if (gameModel) updateGameTitle();
+        // Les regles non plus : elles sont un fichier HTML par langue, qu'il
+        // faut recharger et non retraduire.
+        loadRulesForLanguage();
+        // La notice existe en deux langues, comme sur le panneau des jeux.
+        $("#info-link").attr("href",
+            lg=="fr" ? "doc/html/readthis_fr.html" : "doc/html/readthis.html");
     }
 }
 

@@ -32,12 +32,13 @@ function check($label, $cond) {
 $tmp = sys_get_temp_dir() . '/joclymatch-fileio-' . getmypid() . '/';
 @mkdir($tmp, 0775, true);
 
-function request($post, $ttl = 2592000, $maxSave = 1048576, $maxChat = 262144) {
+function request($post, $ttl = 2592000, $maxSave = 1048576, $maxChat = 262144, $trim = 1) {
     global $tmp;
     $runner = __DIR__ . '/fileio-runner.php';
     $cmd = escapeshellcmd(PHP_BINARY) . ' ' . escapeshellarg($runner) . ' '
         . escapeshellarg(json_encode($post)) . ' ' . escapeshellarg($tmp) . ' '
-        . escapeshellarg($ttl) . ' ' . escapeshellarg($maxSave) . ' ' . escapeshellarg($maxChat);
+        . escapeshellarg($ttl) . ' ' . escapeshellarg($maxSave) . ' ' . escapeshellarg($maxChat) . ' '
+        . escapeshellarg($trim);
     return shell_exec($cmd);
 }
 
@@ -128,10 +129,53 @@ check('un message multiligne est refuse', strpos($r, 'single line') !== false);
 $r = json_decode(request(array('chatioaction' => 'load', 'gameid' => $cid)), true);
 check('et le fil reste lisible', isset($r['messages']) && count($r['messages']) === 2);
 
-// Le fichier est en ajout : sans borne il grossit tant que la partie dure.
-$r = request(array('chatioaction' => 'save', 'gameid' => $cid, 'chatmsg' => '{"m":"' . str_repeat('x', 200) . '"}'),
-    2592000, 1048576, 100);
-check('un fil plein refuse le message suivant', strpos($r, 'chat log full') !== false);
+/*
+ * LE FIL PLEIN NE FERME PLUS LA CONVERSATION.
+ *
+ * Le fichier est en ajout et une partie par correspondance dure des semaines :
+ * la borne finit par etre atteinte, et le fil restait alors fige au milieu
+ * d'une partie qui continuait. On retire desormais les plus anciens messages
+ * pour loger les nouveaux.
+ */
+$full = 'full-' . getmypid();
+for ($i = 1; $i <= 6; $i++) {
+    request(array('chatioaction' => 'save', 'gameid' => $full,
+        'chatmsg' => '{"m":"' . $i . str_repeat('x', 40) . '"}'), 2592000, 1048576, 200);
+}
+$r = json_decode(request(array('chatioaction' => 'load', 'gameid' => $full), 2592000, 1048576, 200), true);
+$msgs = isset($r['messages']) ? $r['messages'] : array();
+check('le fil accepte encore des messages une fois plein', count($msgs) > 0);
+check('et ce sont les DERNIERS qui restent',
+    count($msgs) && substr($msgs[count($msgs) - 1]['m'], 0, 1) === '6');
+check('les premiers ont laisse la place', count($msgs) && substr($msgs[0]['m'], 0, 1) !== '1');
+check('le fichier reste sous la borne', filesize($tmp . $full . '-chat.txt') <= 200);
+// Le serveur DIT combien il a retire : un client qui le lit peut l'annoncer,
+// plutot que de laisser le debut du fil disparaitre sans explication.
+$r = json_decode(request(array('chatioaction' => 'save', 'gameid' => $full,
+    'chatmsg' => '{"m":"7' . str_repeat('x', 40) . '"}'), 2592000, 1048576, 200), true);
+check('la reponse annonce ce qui a ete retire',
+    isset($r['ok']) && isset($r['trimmed']) && $r['trimmed'] >= 1);
+
+// Un message plus gros que le fil entier ne rentrera jamais : c'est le seul
+// refus qui reste, et il porte sur CE message.
+$r = request(array('chatioaction' => 'save', 'gameid' => $full,
+    'chatmsg' => '{"m":"' . str_repeat('x', 400) . '"}'), 2592000, 1048576, 200);
+check('un message plus gros que le fil est refuse', strpos($r, 'chat message too large') !== false);
+$r = json_decode(request(array('chatioaction' => 'load', 'gameid' => $full), 2592000, 1048576, 200), true);
+check('et le fil reste lisible apres ce refus', isset($r['messages']) && count($r['messages']) > 0);
+
+// L'ancien comportement reste disponible pour un hebergement qui prefere
+// archiver : $chatTrimOldest = false dans localconf.php.
+$keep = 'keep-' . getmypid();
+$r = '';
+for ($i = 1; $i <= 3; $i++) {
+    $r = request(array('chatioaction' => 'save', 'gameid' => $keep,
+        'chatmsg' => '{"m":"' . $i . str_repeat('x', 80) . '"}'), 2592000, 1048576, 200, 0);
+}
+check('sans retrait, un fil plein refuse toujours', strpos($r, 'chat log full') !== false);
+$r = json_decode(request(array('chatioaction' => 'load', 'gameid' => $keep), 2592000, 1048576, 200, 0), true);
+check('et garde ses premiers messages',
+    isset($r['messages']) && count($r['messages']) === 2 && substr($r['messages'][0]['m'], 0, 1) === '1');
 
 // Un fichier existant mais VIDE -- premier message refuse, ecriture
 // interrompue : la boucle de lecture ne tournait pas, $msgs restait indefini,
@@ -142,6 +186,49 @@ file_put_contents($tmp . $empty . '-chat.txt', '');
 $raw = request(array('chatioaction' => 'load', 'gameid' => $empty));
 check('un fil vide rend du JSON propre, sans avertissement devant',
     json_decode($raw, true) !== null && strpos($raw, 'Warning') === false);
+
+// --- dialecte match.php (action / mid / data) --------------------------------
+//
+// mogichex parle action/mid/data la ou joclymatch et Tabulon parlent
+// gameioaction/gameid/gamedata. Les deux doivent aboutir au MEME fichier :
+// c'est toute la raison d'etre de la traduction, et ce que ces verifications
+// tiennent.
+
+$dia = 'dialecte-' . getmypid();
+request(array('action' => 'save', 'mid' => $dia, 'data' => '{"venu":"de mogichex"}'));
+check('le dialecte match.php ecrit bien la partie',
+    file_get_contents($tmp . $dia . '.txt') === '{"venu":"de mogichex"}');
+
+$r = request(array('gameioaction' => 'load', 'gameid' => $dia));
+check('et le dialecte joclymatch la relit', strpos($r, 'de mogichex') !== false);
+
+$r = request(array('action' => 'load', 'mid' => $dia));
+check('le dialecte match.php relit aussi', strpos($r, 'de mogichex') !== false);
+
+// Un identifiant invalide doit etre refuse quel que soit le dialecte : la
+// traduction a lieu AVANT la validation, sinon elle ouvrirait une porte que
+// l'autre chemin ferme.
+request(array('action' => 'save', 'mid' => '../evade', 'data' => 'x'));
+check('le dialecte match.php ne contourne pas la validation d identifiant',
+    !file_exists($tmp . '../evade.txt') && !file_exists(dirname($tmp) . '/evade.txt'));
+
+// Le dialecte d'origine reste prioritaire : un client qui enverrait les deux
+// obtient ce qu'il obtenait avant.
+$deux = 'deux-' . getmypid();
+request(array('gameioaction' => 'save', 'gameid' => $deux, 'gamedata' => 'joclymatch',
+    'action' => 'save', 'mid' => 'autre-' . getmypid(), 'data' => 'mogichex'));
+check('gameioaction l emporte quand les deux sont presents',
+    file_get_contents($tmp . $deux . '.txt') === 'joclymatch'
+    && !file_exists($tmp . 'autre-' . getmypid() . '.txt'));
+
+// Le chat de mogichex passe par des cles de partie ordinaires (<mid>-ca), donc
+// par le meme chemin : rien de special a prevoir.
+request(array('action' => 'save', 'mid' => $dia . '-ca', 'data' => '{"msgs":[]}'));
+check('une cle de fil mogichex est acceptee telle quelle',
+    file_exists($tmp . $dia . '-ca.txt'));
+
+$r = request(array('action' => 'drop', 'mid' => $dia));
+check('le dialecte match.php sait aussi effacer', !file_exists($tmp . $dia . '.txt'));
 
 // --- menage ------------------------------------------------------------------
 

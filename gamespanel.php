@@ -23,7 +23,14 @@
 
 
 <body>
-    <div id="info-div"><a id="info-link" href="doc/html/readthis.html">&#9432; <span class='t'>About this site</span></a></div>
+    <!-- NOUVEL ONGLET, et ce n'est pas un detail de confort : la notice remplacait
+     la page, et le retour du navigateur ne ramenait pas la ou l'on etait --
+     depuis un match, on le perdait ; depuis ce panneau, on perdait la selection
+     et les deux liens de partie qu'on venait de creer. Le bloc a de la valeur
+     (c'est le seul chemin vers la notice) ; c'est la navigation qui etait
+     fautive. L'ancien lien « Jocly on Github » portait d'ailleurs deja
+     target="_blank", pour exactement cette raison. -->
+<div id="info-div"><a id="info-link" href="doc/html/readthis.html" target="_blank" rel="noopener">&#9432; <span class='t'>About this site</span></a></div>
     <div id="game-details">
         <div id="lg-flag"><img id="flagicon" src="i/flags/en.svg"></div>
         <div id="gd-game-icon"><img class="gd-game-icon-img" src="i/jocly-logo.png"></div>
@@ -35,6 +42,14 @@
             <div id="gd-buttons-match" class="gd-button" onClick="javascript:createMatch();"><span class='t'>Create match</span> <img class="button-svg-pic" src="i/users-connected.svg"></div>
         </div>
         <div id="match-area">
+            <!-- Reglage de la PARTIE, transmis dans les deux liens (tb=0/1) :
+                 DANS la zone du match, visible et masque avec les liens qu'il
+                 modifie -- il n'a de sens que pour un match, on reprend
+                 librement ses coups quand on joue seul. Decoche par defaut ;
+                 le changer reconstruit les memes liens (meme match). -->
+            <div id="gd-match-options">
+                <label><input type="checkbox" id="allow-takeback"> <span class='t'>Allow taking back moves</span></label>
+            </div>
             <div><span class='t'>Link for player A : </span></a><input class="player-link" id="linka" size="70" spellcheck="false" readonly="" type="text" value="link for player a"> <a id="blinka" href="javascript:copy2Clipboard('a');"><span class='t'>Copy</span></a> • <a id="goplaya" target="_blank" href=""><span class='t'>Open</span></a></div>
             <div><span class='t'>Link for player B : </span></a><input class="player-link" id="linkb" size="70" spellcheck="false" readonly="" type="text" value="link for player b"> <a id="blinkb" href="javascript:copy2Clipboard('b');"><span class='t'>Copy</span></a> • <a id="goplayb" target="_blank" href=""><span class='t'>Open</span></a></div>
         </div>

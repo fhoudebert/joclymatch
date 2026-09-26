@@ -110,6 +110,14 @@ html,body {
     margin-left : 10%;
     border-radius : 5px 0 0 5px;
 }
+/* Message chiffre qu'on ne sait pas lire : present, signale, et visiblement
+   different d'un message ordinaire. Le montrer en clair-obscur vaut mieux que
+   de faire disparaitre un tour de conversation. */
+.cm-sealed > .cm-text {
+    font-style: italic;
+    opacity: .75;
+}
+
 .cm-system{
     background-color: rgba(255,255,255,1);
     margin : 10px 0;
@@ -289,4 +297,12 @@ html,body {
     padding: 0px 5px 5px 5px;
     font-size: 14px;
     border-radius: 0 0px 5px 5px;
+}
+
+/* Motif affiche quand la partie interdit la reprise de coup : discret, mais
+   present -- un bouton qui manque sans explication passe pour une panne. */
+.takeback-forbidden {
+    font-size: 12px;
+    font-style: italic;
+    margin: 4px 0;
 }
