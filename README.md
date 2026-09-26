@@ -8,7 +8,7 @@ A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/
 - **Play with a friend** — create a match and get two links: one for player A, one for player B. Send the other link to your opponent and play at your own pace.
 - **Read the rules** — every game comes with its rules, available directly in the interface.
 - **Chat** — a simple in-match chat between the two players.
-- **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, each player can take back on their own turn, and the opponent's board follows.
+- **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, a player can, on their own turn, take back their last move together with the opponent's reply, and the opponent's board follows.
 - **Save / snapshot** — export a match as a JSON file, or take a picture of the board.
 
 ## Design choices (features or limitations, you decide)
@@ -98,10 +98,12 @@ only comes from a relay where `$chatTrimOldest` is off.
 
 ## Other clients
 
-Three applications share this relay — joclymatch, [Tabulon](https://github.com/fhoudebert/tabulon)
+Three applications speak this relay's format — joclymatch, [Tabulon](https://github.com/fhoudebert/tabulon)
 and [mogichex](https://github.com/fhoudebert/mogichex) — so the endpoints accept
 two spellings of the same operations, and the chat renderer tolerates messages
-it did not write.
+it did not write. A match lives on ONE relay: a Tabulon player joins a joclymatch
+match here; mogichex ships its own `fileio.php` next to its own match files, so a
+mogichex match is joined from Tabulon, not from this server.
 
 **Two dialects, one behaviour.** `action/mid/data` is translated to
 `gameioaction/gameid/gamedata` before anything else happens, `since` to
@@ -134,12 +136,15 @@ missing `pseudo` falls back to "Player A" / "Player B".
 not of a player. It is announced by the link (`tb=1` / `tb=0`, in the query
 string) and then carried by the match file as `matchDetails.allowTakeback`
 (boolean). The file wins over the link: it is the same for both players and
-survives a reload or a truncated link. **Absent means allowed** — that is how
-every match created before the setting behaves. Both clients rebuild
+survives a reload or a truncated link. **Absent means forbidden**, as in mogichex
+and Tabulon: the other end of such a match may be an older client that does not
+follow a takeback. Receiving a takeback never depends on the setting. Both clients rebuild
 `matchDetails` on each save, so a client writing the other end must **copy
 `allowTakeback` back** into every save, or its first save erases the host's
 choice. A takeback is a save with a *lower* `nbTurns` and the full state: load
-it as is, never replay its last move.
+it as is, never replay its last move. `nbTurns` is the number of moves played
+(`getPlayedMoves().length`), not a counter: a takeback from this client lowers it
+by two (the player's own move and the reply).
 
 A takeback is only offered on your own turn: this client polls the relay only
 while it waits for the opponent, so a takeback sent during its own turn would
@@ -174,7 +179,10 @@ $pushWsUrl = "wss://example.org/push/";
 
 - [jocly2](https://github.com/fhoudebert/jocly2) — the Jocly board game library (games, 2D/3D views, AI)
 - [jcfrog/jocly-simple-match](https://github.com/jcfrog/jocly-simple-match) — the original experiment this project is based on
-- [tabulon](https://github.com/fhoudebert/tabulon) — Tabulon can play remotely with a joclymatch server
+- [tabulon](https://github.com/fhoudebert/tabulon) — desktop application; can play remotely with a joclymatch server
+- [mogichex](https://github.com/fhoudebert/mogichex) — the mobile counterpart (installable web app / Android); same invitation link and chat formats
+
 ## License
 
-AGPL-3.0 (see `package.json`) — Tabulon builds on the Jocly library and JoclyBoard, both AGPL.
+JoclyMatch is free software under the [GNU Affero General Public License v3](LICENSE) or later.
+It loads the Jocly library, itself AGPL-3.0, into its pages.

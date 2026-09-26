@@ -74,12 +74,11 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 			<div id="mode-panel" style="display: none;" class="box">
 				<div id="lg-flag"><img id="flagicon" src="i/flags/en.svg"></div>
 				<h3><span class="t">Controls</span></h3>
-				<!-- Ces deux boutons existaient DANS control.js mais pas dans la
-				     page : les gestionnaires etaient poses sur des elements
-				     absents, donc du code mort. Ils sont caches tant qu'aucun coup
-				     n'a ete joue -- annuler le neant n'a pas de sens. -->
+				<!-- Ce bouton existait DANS control.js mais pas dans la page : code
+				     mort. Il reste cache tant qu'il n'y a pas deux coups a reprendre.
+				     Pas de « Recommencer » : un match a distance ne se remet pas a
+				     zero d'un clic (meme choix que mogichex). -->
 				<button id="takeback" style="display: none;"><span class="t">Take back my last move</span></button>
-				<button id="restart" style="display: none;"><span class="t">Restart match</span></button>
 				<!-- Un bouton qui disparait sans motif se lit comme une panne : quand
 				     la partie interdit la reprise, on le dit. -->
 				<p id="takeback-forbidden" class="takeback-forbidden" style="display: none;"><span class="t">This match does not allow taking back moves.</span></p>

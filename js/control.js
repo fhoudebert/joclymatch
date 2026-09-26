@@ -56,10 +56,14 @@ var takingBack = false;
 // sauvegarde -- sans quoi notre premiere ecriture effacerait le choix de
 // l'hote, matchDetails etant reecrit en entier.
 //
-// ABSENT = AUTORISE : c'est le comportement de toutes les parties creees
-// avant ce reglage, et le seul qui ne fasse rien regresser.
+// ABSENT = INTERDIT, comme dans mogichex et Tabulon. « Autorise » ne
+// preservait rien : avant ce reglage, le bouton de reprise etait du code mort.
+// Et l'adversaire d'une partie sans reglage peut etre un client anterieur, qui
+// ne suit pas une reprise (il rejouait le dernier coup du fichier) : les deux
+// plateaux divergeraient. Recevoir une reprise, en revanche, ne depend pas de
+// ce reglage -- on suit toujours l'adversaire.
 function takebackAllowed(){
-    return matchDetails.allowTakeback !== false;
+    return matchDetails.allowTakeback === true;
 }
 
 // Boutons de reprise : possibles si la partie l'autorise ET que c'est notre
@@ -75,7 +79,6 @@ function refreshTakebackButtons(match){
     return match.getPlayedMoves().then((moves) => {
         var allowed = myTurnNow && takebackAllowed();
         $("#takeback").toggle(allowed && moves.length >= 2);
-        $("#restart").toggle(allowed && moves.length > 0);
     });
 }
 
@@ -968,11 +971,11 @@ $(document).ready(function () {
                         });
                 });
 
-                $("#restart").on("click",function() {
-                    if (!window.confirm(t("Restart this match from the beginning?")))
-                        return;
-                    rollbackTo(0, t("You restarted the match."));
-                });
+                // PAS DE « RECOMMENCER » dans un match a distance, comme dans
+                // mogichex : effacer toute la partie d'un clic, sur le plateau
+                // de l'adversaire aussi, va bien au-dela d'une reprise de coup.
+                // Un nbTurns a 0 recu d'un autre client reste suivi (voir
+                // loadMatchFromID).
 
                 // yeah, using the fullscreen API is not as easy as it should be
                 var requestFullscreen = area.requestFullscreen || area.webkitRequestFullscreen || 
@@ -1048,13 +1051,9 @@ var translations = {
         {fr : "Message chiffré — ce client n'a pas la clé pour le lire."},
     "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"},
     "Take back my last move" : {fr : "Reprendre mon dernier coup"},
-    "Restart match" : {fr : "Recommencer la partie"},
     "Take back your last move? Your opponent's reply is undone too, and their board will change." :
         {fr : "Reprendre votre dernier coup ? La réponse de votre adversaire est annulée aussi, et son plateau changera."},
-    "Restart this match from the beginning?" :
-        {fr : "Recommencer cette partie depuis le début ?"},
     "You took back your last move." : {fr : "Vous avez repris votre dernier coup."},
-    "You restarted the match." : {fr : "Vous avez recommencé la partie."},
     "Your opponent took back a move." : {fr : "Votre adversaire a repris un coup."},
     "Your opponent restarted the match." : {fr : "Votre adversaire a recommencé la partie."},
     "This match does not allow taking back moves." :
