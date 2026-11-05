@@ -9,7 +9,8 @@
 // ci-dessous a ete scelle par mogichex, et Tabulon verifie le meme dans ses
 // tests Rust (seal_cmds.rs, opens_a_message_sealed_by_mogichex).
 
-import { makeSealer, parseChatFragment, generateChatKey, isChatKey } from '../js/chat-seal.js';
+import { makeSealer, parseChatFragment, generateChatKey, isChatKey,
+    rememberChatKey, recallChatKey, addressWithoutKey, STORAGE_PREFIX } from '../js/chat-seal.js';
 
 let failures = 0;
 let tests = 0;
@@ -72,6 +73,42 @@ check('#kid= (cle de communaute Tabulon) est releve, sans cle',
 check('une cle tronquee (copier-coller abime) est ignoree', parseChatFragment('#k=' + KEY.slice(0, 40)).chatKey === null);
 check('pas de fragment : ni cle ni empreinte',
     (() => { const f = parseChatFragment(''); return f.chatKey === null && f.chatKeyId === null; })());
+
+// --- la cle hors de la barre d'adresse -------------------------------------------
+// Rangee dans le sessionStorage de l'onglet, sous l'identifiant de la partie,
+// puis retiree de l'adresse : ni historique, ni partage d'ecran, ni adresse
+// recopiee ne la portent plus.
+function memoryStorage() {
+    const m = new Map();
+    return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), map: m };
+}
+{
+    const st = memoryStorage();
+    check('la cle est rangee', rememberChatKey(st, '1700000000000-AbCd', { chatKey: KEY }));
+    check('sous l’identifiant de la partie', st.map.has(STORAGE_PREFIX + '1700000000000-AbCd'));
+    check('et relue pour cette partie', recallChatKey(st, '1700000000000-AbCd').chatKey === KEY);
+    check('une autre partie n’en herite pas', recallChatKey(st, '1700000000000-Autre').chatKey === null);
+    rememberChatKey(st, 'm-kid', { chatKeyId: '0123456789abcdef' });
+    check('l’empreinte Tabulon se range aussi (pour le dire apres rechargement)',
+        recallChatKey(st, 'm-kid').chatKeyId === '0123456789abcdef');
+    st.setItem(STORAGE_PREFIX + 'abime', '{"k":"pas une cle"}');
+    check('une valeur rangee abimee est ignoree', recallChatKey(st, 'abime').chatKey === null);
+    st.setItem(STORAGE_PREFIX + 'pas-json', '{');
+    check('du JSON abime aussi, sans exception', recallChatKey(st, 'pas-json').chatKey === null);
+}
+{
+    const plein = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); } };
+    check('stockage indisponible : on le dit (et le fragment sera laisse)',
+        rememberChatKey(plein, 'm', { chatKey: KEY }) === false);
+    check('pas de stockage du tout : idem', rememberChatKey(null, 'm', { chatKey: KEY }) === false);
+}
+{
+    const base = 'https://h.fr/index.php?game=chess&mid=1-AbC&player=a';
+    check('l’adresse perd la cle', addressWithoutKey(base + '#k=' + KEY) === base);
+    check('et l’empreinte', addressWithoutKey(base + '#kid=0123456789abcdef') === base);
+    check('le reste du fragment est garde', addressWithoutKey(base + '#k=' + KEY + '&x=1') === base + '#x=1');
+    check('une adresse sans fragment ne change pas', addressWithoutKey(base) === base);
+}
 
 console.log(`\n${tests} verifications, ${failures} echec(s)`);
 process.exit(failures === 0 ? 0 : 1);

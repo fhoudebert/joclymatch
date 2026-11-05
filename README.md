@@ -191,6 +191,16 @@ it leaves the page**, and the server only ever stores opaque bytes.
   with the match key says so. If the page has a key but the browser could not
   load the encryption, messages are **not sent** rather than sent in clear.
 - **Rematch** links offered at the end of a game keep the key.
+- **The key leaves the address bar once read.** `js/chat-seal.js` stores it in
+  `sessionStorage` — per **tab**, cleared when the tab closes — under the match
+  id (`joclymatch-chat-key:<mid>`), then removes `k`/`kid` from the fragment
+  with `history.replaceState`. A reload finds it there; another tab opened on
+  the cleaned address does not. So the key no longer shows on a shared screen,
+  nor travels with an address copied from the bar. If storage is unavailable,
+  the fragment is **left** in place (losing the key on the first reload would
+  be worse). What it does **not** do: erase the browser's history, which keeps
+  the visited address, key included (checked on Chromium) — like the message
+  that carried the link.
 - **Not covered**: a Tabulon *community key* (`#kid=` in the link) — joclymatch
   has no keyring, so such a match is shown as not protected; an older link
   without a key stays unprotected, as before.

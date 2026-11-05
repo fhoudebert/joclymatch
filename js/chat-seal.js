@@ -135,15 +135,90 @@ export function makeSealer(key, { rand = null } = {}) {
     };
 }
 
+// ── La clé hors de la barre d'adresse ───────────────────────────────────────
+//
+// POURQUOI. Laissée dans le fragment, la clé reste dans l'adresse affichée :
+// elle part dans l'historique du navigateur (et dans sa synchronisation entre
+// appareils), elle se voit en partage d'écran, et elle accompagne une adresse
+// recopiée depuis la barre pour la donner à quelqu'un d'autre. Le lien reçu,
+// lui, la garde : c'est par lui qu'on rouvre la partie.
+//
+// COMMENT. Lue au chargement, la clé est rangée en sessionStorage, propre à
+// l'ONGLET et effacé quand il se ferme, sous l'identifiant de la partie ; puis
+// le fragment est retiré de l'adresse (history.replaceState, sans
+// rechargement). Un rechargement de l'onglet la retrouve là.
+//
+// Si le stockage est indisponible (réglage du navigateur), le fragment est
+// LAISSÉ : perdre la clé au premier rechargement serait pire que de la voir.
+
+export const STORAGE_PREFIX = 'joclymatch-chat-key:';
+
+/** Range la clé (et l'empreinte) d'une partie. Rend true si c'est fait. */
+export function rememberChatKey(storage, matchId, { chatKey = null, chatKeyId = null } = {}) {
+    if (!storage || !matchId || (!chatKey && !chatKeyId)) return false;
+    try {
+        storage.setItem(STORAGE_PREFIX + matchId, JSON.stringify({ k: chatKey, kid: chatKeyId }));
+        return storage.getItem(STORAGE_PREFIX + matchId) !== null;
+    } catch {
+        return false;
+    }
+}
+
+/** Relit ce qui a été rangé pour cette partie ; valeurs mal formées ignorées. */
+export function recallChatKey(storage, matchId) {
+    const none = { chatKey: null, chatKeyId: null };
+    if (!storage || !matchId) return none;
+    try {
+        const v = JSON.parse(storage.getItem(STORAGE_PREFIX + matchId) || 'null');
+        if (!v || typeof v !== 'object') return none;
+        return parseChatFragment('k=' + (v.k || '') + '&kid=' + (v.kid || ''));
+    } catch {
+        return none;
+    }
+}
+
+/**
+ * L'adresse sans la clé : `k` et `kid` retirés du fragment, le reste du
+ * fragment conservé (s'il n'en reste rien, plus de `#` du tout).
+ */
+export function addressWithoutKey(href) {
+    const i = String(href).indexOf('#');
+    if (i < 0) return String(href);
+    const params = new URLSearchParams(String(href).slice(i + 1));
+    params.delete('k');
+    params.delete('kid');
+    const rest = params.toString();
+    return String(href).slice(0, i) + (rest ? '#' + rest : '');
+}
+
 // ── Dans la page ────────────────────────────────────────────────────────────
 //
 // La clé est lue UNE fois, au chargement. control.js n'a pas besoin de la
-// connaître : il ne voit que le scelleur.
+// connaître : il ne voit que le scelleur (et le fragment à remettre dans les
+// liens de revanche).
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    const { chatKey, chatKeyId } = parseChatFragment(window.location.hash);
+    const matchId = new URLSearchParams(window.location.search).get('mid') || '';
+    let storage = null;
+    try { storage = window.sessionStorage; } catch { storage = null; }
+
+    let found = parseChatFragment(window.location.hash);
+    if (found.chatKey || found.chatKeyId) {
+        // Rangée d'abord, retirée ensuite -- et seulement si le rangement a marché.
+        if (rememberChatKey(storage, matchId, found)) {
+            try {
+                window.history.replaceState(window.history.state, '', addressWithoutKey(window.location.href));
+            } catch { /* adresse laissée telle quelle */ }
+        }
+    } else {
+        found = recallChatKey(storage, matchId);
+    }
+    const { chatKey, chatKeyId } = found;
     window.joclyChatSeal = {
         sealer: chatKey ? makeSealer(chatKey) : null,
         chatKeyId,
+        // À remettre dans un lien qu'on PROPOSE (revanche) : ce lien-là doit
+        // porter la clé, comme celui reçu au départ.
+        fragment: chatKey ? '#k=' + chatKey : '',
         generateChatKey,
     };
     window.dispatchEvent(new Event('jocly-chat-seal-ready'));

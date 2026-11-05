@@ -17,8 +17,9 @@ function NotifyWinner(winner) {
         ? "&tb=" + (matchDetails.allowTakeback ? "1" : "0") : "";
     var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+tb+"&player=";
     // La revanche garde AUSSI la cle de discussion : memes deux joueurs, et
-    // sans elle la nouvelle partie repartirait sans protection.
-    var frag = chatKeyExpected() ? window.location.hash : "";
+    // sans elle la nouvelle partie repartirait sans protection. Prise dans le
+    // module : elle n'est plus dans l'adresse une fois lue.
+    var frag = (window.joclyChatSeal && window.joclyChatSeal.fragment) || "";
 
     // propose new game
     var html = t("End of game")+" : "+"<div class='winner-message'>"+text+"</div>";
@@ -313,11 +314,19 @@ function loadRules(rulesPath,fullPath){
 function chatSealer(){
     return (window.joclyChatSeal && window.joclyChatSeal.sealer) || null;
 }
-// La page a-t-elle recu une cle ? Lu dans l'adresse et non dans le module :
-// si le module de chiffrement n'a pas pu se charger, il faut le savoir pour
-// REFUSER d'envoyer en clair un message que l'auteur croit protege.
+// La page a-t-elle recu une cle ? Lu dans l'adresse et dans le rangement de
+// l'onglet, et non dans le module : si le module de chiffrement n'a pas pu se
+// charger, il faut le savoir pour REFUSER d'envoyer en clair un message que
+// l'auteur croit protege. (Une fois lue, la cle quitte l'adresse pour le
+// sessionStorage de l'onglet -- voir js/chat-seal.js.)
 function chatKeyExpected(){
-    return /(^#|&)k=[0-9a-fA-F]{64}(&|$)/.test(window.location.hash || "");
+    if (/(^#|&)k=[0-9a-fA-F]{64}(&|$)/.test(window.location.hash || "")) return true;
+    try {
+        var v = JSON.parse(window.sessionStorage.getItem("joclymatch-chat-key:" + matchDetails.matchId) || "null");
+        return !!(v && /^[0-9a-f]{64}$/.test(v.k || ""));
+    } catch (e) {
+        return false;
+    }
 }
 
 class ChatMsg{
