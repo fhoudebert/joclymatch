@@ -1,0 +1,61 @@
+<?php
+// Copier en localconf.php, a la racine du site, et adapter.
+//
+// Ce fichier N'A PAS de balise PHP fermante, et c'est voulu : le moindre octet
+// emis apres elle (ligne vide, espace, BOM) se retrouverait devant le JSON de
+// fileio.php et ferait echouer le JSON.parse() des clients.
+
+// ── Obligatoire ──────────────────────────────────────────────────────────────
+
+// Adresse de cette installation de joclymatch (barre finale comprise).
+$joclyMatchURL  = "https://example.org/joclymatch/";
+
+// Adresse de la page de jeu.
+$joclyPlayerURL = "https://example.org/joclymatch/index.php";
+
+// Chemin ou adresse de la bibliotheque Jocly (jocly.js et ses jeux).
+$joclyDistPath  = "dist/browser/jocly.js";
+
+// Repertoire des fichiers de partie et de discussion (barre finale comprise,
+// accessible en ecriture au serveur web). Le placer HORS de la racine web si
+// l'hebergeur le permet.
+$savePath       = "saves/";
+
+// ── Duree de vie des parties et des discussions ──────────────────────────────
+//
+// Facultatif : les valeurs ci-dessous sont celles qu'on obtient sans rien
+// ecrire. Elles ne sont rappelees ici que pour etre faciles a retrouver.
+
+// Duree de conservation d'un fichier de partie ou de discussion SANS
+// MODIFICATION, en secondes. C'est le filet des parties abandonnees en
+// silence : une partie terminee normalement est effacee des la fermeture de
+// la page du joueur qui a recu le dernier coup (gameioaction=drop). 30 jours
+// laissent le temps d'une partie par correspondance.
+$saveTTL        = 30 * 24 * 3600;   // 30 jours
+
+// Plus gros etat de partie accepte en une sauvegarde.
+$saveMaxBytes   = 1048576;          // 1 Mo
+
+// Plus gros fil de discussion pour une partie (le fichier est en ajout).
+$chatMaxBytes   = 262144;           // 256 Ko
+
+// Fil plein : retirer les plus anciens messages pour loger les nouveaux
+// (true), ou refuser les messages suivants (false).
+$chatTrimOldest = true;
+
+// Jusqu'ou descendre quand on retire : un quart d'un coup, pour ne pas
+// reecrire tout le fichier a chaque message.
+$chatTrimTo     = 196608;           // 192 Ko (75 % de $chatMaxBytes)
+
+// ── Facultatif : coups adverses plus rapides ─────────────────────────────────
+//
+// Desactive par defaut. Voir le README, « Optional: faster move notifications ».
+
+// Attente longue : le serveur retient la reponse jusqu'a un coup (20 s au
+// plus). Seulement si les processus PHP de l'hebergement peuvent tenir des
+// requetes ouvertes.
+// $enableLongPolling = true;
+
+// Notification quasi immediate par WebSocket (serveur Node.js, voir
+// push/README.md).
+// $pushWsUrl = "wss://example.org/push/";

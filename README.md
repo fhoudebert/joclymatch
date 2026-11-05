@@ -26,7 +26,7 @@ Requirements: any web server able to run PHP. No database, no framework, no buil
 1. Copy the content of this repository to your web server.
 2. Get a Jocly distribution (the `jocly.js` bundle and its games) from [jocly2](https://github.com/fhoudebert/jocly2) and make it reachable from your site.
 3. Create a writable directory for match files, e.g. `saves/` (the web server user must be able to write to it).
-4. Create a `localconf.php` file at the root of the site:
+4. Copy `localconf.php.example` to `localconf.php` at the root of the site and adapt it. The four settings below are required; the file also lists, with their default values, the optional ones described next (match lifetime, long-polling, push):
 
 ```php
 <?php
@@ -46,6 +46,8 @@ $savePath       = "saves/";
 5. Open `gamespanel.php` in your browser, pick a game, and play!
 
 ### Optional settings
+
+All of them are in `localconf.php.example`, with their default values.
 
 Match and chat files used to accumulate forever: nothing ever deleted them, and
 the only way to reclaim space was to remove them by hand. They now expire, and
