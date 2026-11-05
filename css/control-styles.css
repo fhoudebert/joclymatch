@@ -117,6 +117,23 @@ html,body {
     font-style: italic;
     opacity: .75;
 }
+/* Recu en clair dans une partie protegee : lisible, mais signale. */
+.cm-unprotected .cm-tag {
+    font-size: 10px;
+    font-style: italic;
+    opacity: .7;
+}
+/* L'etat de la conversation, sur sa ligne, au-dessus de « Mon nom ». */
+.chat-protection {
+    display: block;
+    text-align: left;
+    margin: 0 5% 2px;
+    font-size: 11px;
+    cursor: help;
+}
+.chat-protection.protected { color: #1d7a1d; }
+.chat-protection.unprotected { color: #8a6d00; }
+.chat-protection.broken { color: #b00000; }
 
 .cm-system{
     background-color: rgba(255,255,255,1);

@@ -7,14 +7,14 @@ A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/
 - **Play against the computer** — pick a game from the panel and play solo.
 - **Play with a friend** — create a match and get two links: one for player A, one for player B. Send the other link to your opponent and play at your own pace.
 - **Read the rules** — every game comes with its rules, available directly in the interface.
-- **Chat** — a simple in-match chat between the two players.
+- **Chat** — a simple in-match chat between the two players, **encrypted** for matches created from the panel: the relay stores only text it cannot read (see [Chat protection](#chat-protection)).
 - **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, a player can, on their own turn, take back their last move together with the opponent's reply, and the opponent's board follows.
 - **Save / snapshot** — export a match as a JSON file, or take a picture of the board.
 
 ## Design choices (features or limitations, you decide)
 
 - **No database.** All you need is a web server with PHP. Matches are stored as plain, human-readable JSON text files.
-- **No login, no password.** Absolutely no personal data is stored — only the moves played (and the chat messages) of each match.
+- **No login, no password.** Absolutely no personal data is stored — only the moves played (and the chat messages, encrypted, see below) of each match.
 - **No ads, no tracking.**
 - **Honor system.** Anyone who has a link can play that side of the board. You *could* cheat by opening both links… but we are gentlemen, aren't we?
 - **Simple polling by default.** The board refreshes with a classic periodic HTTP polling, which works on any shared PHP hosting. Optional faster modes exist (see below).
@@ -119,7 +119,8 @@ the server:
 |---|---|
 | `msg` | the text, **or** a base64 seal when `enc` is set |
 | `player` | `1` / `-1`, or `0` for service messages |
-| `pseudo` | display name, free text |
+| `pseudo` | display name, free text — **absent** from sealed messages |
+| `pseudoEnc` | optional: the display name, sealed with the same key (joclymatch only; other clients show the side) |
 | `time`, `key` | `time + "-" + key` is the message id |
 | `kind` | optional: `chat` when absent, else `presence`, `nudge`, … |
 | `quick`, `state` | optional: identifiers translated by the reader |
@@ -128,8 +129,9 @@ the server:
 **What this client does with what it does not understand.** An unknown `kind` is
 skipped in silence, so a fourth kind can be added without breaking installed
 clients. A message with no textual `msg` is skipped rather than shown as
-`undefined`. A sealed body (`enc:1`) is shown as a padlock and an explanation,
-never as raw base64 — a message you cannot read is still worth knowing about. A
+`undefined`. A sealed body (`enc:1`) is opened when the page has the match key;
+otherwise it is shown as a padlock and an explanation, never as raw base64 — a
+message you cannot read is still worth knowing about. A
 missing `pseudo` falls back to "Player A" / "Player B".
 
 **Taking back moves.** Whether a match allows it is a setting of the *match*,
@@ -158,6 +160,44 @@ Two things are worth knowing if you write the other end: a message must be **one
 line** (the server reads the file line by line and rejects `\r` or `\n` with a
 400), and `msg` is what a client that ignores `quick` will display — leaving it
 empty puts an empty bubble in the thread.
+
+## Chat protection
+
+**What it protects, and from whom.** This relay has no accounts: whoever runs
+the server, and whoever knows a match id, can read what is stored. So the chat
+text of a match created from the games panel is **sealed in the browser before
+it leaves the page**, and the server only ever stores opaque bytes.
+
+- **The key.** `gamespanel.js` draws 32 random bytes per match and puts them in
+  the **fragment** of both links: `index.php?…&player=a#k=<64 hex chars>`. A
+  browser never sends the fragment to the server — not to `index.php`, not to
+  `fileio.php`, not in a `Referer` header. Whoever has the full link has the key:
+  send links privately, as you already do.
+- **The seal.** XChaCha20-Poly1305 with a random 192-bit nonce per message,
+  `msg = base64(nonce ‖ ciphertext ‖ tag)` and `enc: 1` — byte for byte the
+  format of Tabulon and mogichex, so the three applications read each other in
+  a shared match. The cipher is [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers)
+  2.4.0 (MIT), vendored unmodified in `js/vendor/noble-ciphers/` (see its
+  `PROVENANCE.md`), loaded by `js/chat-seal.js` as an ES module.
+- **The name.** In a protected match the display name is sealed too
+  (`pseudoEnc`) instead of travelling in clear with every message.
+- **What stays visible to the server**: who writes (the side), when, the length
+  of each message, Tabulon's quick messages and presence flags (they carry no
+  personal text, by design), and the moves.
+- **What the chat panel shows**: "🔒 Protected" / "Not protected" next to
+  *My name*, with the explanation as a tooltip. A message received **in clear**
+  in a protected match (an old client, a link that lost its fragment) is shown
+  and marked "(sent without protection)". A sealed message that does not open
+  with the match key says so. If the page has a key but the browser could not
+  load the encryption, messages are **not sent** rather than sent in clear.
+- **Rematch** links offered at the end of a game keep the key.
+- **Not covered**: a Tabulon *community key* (`#kid=` in the link) — joclymatch
+  has no keyring, so such a match is shown as not protected; an older link
+  without a key stays unprotected, as before.
+
+Tests: `node tests/test-chat-seal.mjs` (no dependency) checks the seal, and
+opens a message sealed by mogichex — the same vector Tabulon checks in its own
+tests — so the three implementations are known to agree.
 
 ## Optional: faster move notifications
 
