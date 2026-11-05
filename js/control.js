@@ -16,13 +16,20 @@ function NotifyWinner(winner) {
     var tb = (typeof matchDetails.allowTakeback === "boolean")
         ? "&tb=" + (matchDetails.allowTakeback ? "1" : "0") : "";
     var link = "index.php?game="+matchDetails.gameName+"&mid="+curId[0]+"-"+incId(curId[1])+tb+"&player=";
+    // La revanche garde AUSSI la cle de discussion : memes deux joueurs, et
+    // sans elle la nouvelle partie repartirait sans protection. Prise dans le
+    // module : elle n'est plus dans l'adresse une fois lue.
+    var frag = (window.joclyChatSeal && window.joclyChatSeal.fragment) || "";
 
     // propose new game
     var html = t("End of game")+" : "+"<div class='winner-message'>"+text+"</div>";
+    // Le dire : sinon la partie disparait du serveur sans que personne l'ait annonce.
+    if (relayDropArmed)
+        html += "<div class='drop-notice'>"+escapeHtml(t("This game and its conversation will be deleted from the server when you close this page."))+"</div>";
     html += t("Start a new game?")+"<br>";
-    html += "<a href=\""+link+"a\">"+t("Play A")+"</a>"
+    html += "<a href=\""+link+"a"+frag+"\">"+t("Play A")+"</a>"
     html += " • ";
-    html += "<a href=\""+link+"b\">"+t("Play B")+"</a>"
+    html += "<a href=\""+link+"b"+frag+"\">"+t("Play B")+"</a>"
     html += "<br>";
     html += t("Or go back to all games")+":<br>";
     html += "<a href=\"gamespanel.php\">"+t("Click here")+"</a>";
@@ -81,6 +88,40 @@ function refreshTakebackButtons(match){
         $("#takeback").toggle(allowed && moves.length >= 2);
     });
 }
+
+/*
+ * EFFACER LA PARTIE DU RELAI, UNE FOIS FINIE.
+ *
+ * Une partie terminee n'a plus rien a faire sur le serveur, ni son etat ni sa
+ * conversation : fileio.php sait les effacer ensemble (gameioaction=drop).
+ *
+ * SEUL CELUI QUI A RECU LE DERNIER COUP efface : il sait que les deux cotes
+ * ont vu la fin. Celui qui l'a joue ne le sait pas -- effacer de son cote
+ * pourrait retirer le coup avant que l'autre l'ait lu. S'il ne revient
+ * jamais, la duree de vie du relai ($saveTTL, 30 jours) fait le menage.
+ * Meme regle que Tabulon et mogichex.
+ *
+ * QUAND LA PAGE SE FERME, pas a la fin de la partie : les mots echanges apres
+ * le dernier coup restent lisibles tant qu'elle est ouverte. `pagehide` et
+ * sendBeacon, parce qu'une requete ordinaire lancee a la fermeture d'une page
+ * n'a aucune garantie de partir ; le navigateur envoie un beacon meme apres.
+ */
+var relayDropArmed = false;
+function armRelayDrop(){
+    relayDropArmed = true;
+}
+function sendRelayDrop(){
+    if (!relayDropArmed || !matchDetails.matchId.length) return;
+    relayDropArmed = false;
+    var fd = new FormData();
+    fd.append("gameioaction", "drop");
+    fd.append("gameid", matchDetails.matchId);
+    if (navigator.sendBeacon && navigator.sendBeacon("./fileio.php", fd)) return;
+    // Repli : meme garantie de partir apres la page, sur les navigateurs qui
+    // ont fetch keepalive mais refusent le beacon.
+    try { fetch("./fileio.php", { method: "POST", body: fd, keepalive: true }); } catch (e) {}
+}
+window.addEventListener("pagehide", sendRelayDrop);
 
 var reloadCounter = 0 ;
 function checkIfOtherUserPlayed(delay) {
@@ -190,8 +231,13 @@ function RunMatch(match, progressBar) {
                     .then((result) => {
                         movePending = null;
                         movePendingResolver();
-                        if (result.finished)
+                        if (result.finished){
+                            // Fin arrivee pendant le tour de l'ADVERSAIRE :
+                            // c'est son coup, recu du serveur, qui termine la
+                            // partie -- les deux cotes l'ont vu.
+                            if (player != iamPlayer) armRelayDrop();
                             NotifyWinner(result.winner);
+                        }
                         else
                             NextMove();
                         })
@@ -294,6 +340,37 @@ function loadRules(rulesPath,fullPath){
 /*
  * Chat
  */
+/*
+ * PROTECTION DES MESSAGES (voir js/chat-seal.js).
+ *
+ * Une partie creee par gamespanel.js porte une cle dans le FRAGMENT du lien
+ * (#k=...) : le texte libre est alors scelle dans cette page avant de partir,
+ * et le relai ne recoit que des octets opaques marques `enc: 1` -- le format
+ * de Tabulon et de mogichex, qui partagent le meme fil.
+ *
+ * Le PSEUDO est scelle avec le message (`pseudoEnc`) : en clair, il dirait au
+ * relai qui parle dans une conversation qu'il ne peut pas lire. Tabulon et
+ * mogichex ne le lisent pas ; ils affichent le camp, ce qui n'apprend rien a
+ * personne.
+ */
+function chatSealer(){
+    return (window.joclyChatSeal && window.joclyChatSeal.sealer) || null;
+}
+// La page a-t-elle recu une cle ? Lu dans l'adresse et dans le rangement de
+// l'onglet, et non dans le module : si le module de chiffrement n'a pas pu se
+// charger, il faut le savoir pour REFUSER d'envoyer en clair un message que
+// l'auteur croit protege. (Une fois lue, la cle quitte l'adresse pour le
+// sessionStorage de l'onglet -- voir js/chat-seal.js.)
+function chatKeyExpected(){
+    if (/(^#|&)k=[0-9a-fA-F]{64}(&|$)/.test(window.location.hash || "")) return true;
+    try {
+        var v = JSON.parse(window.sessionStorage.getItem("joclymatch-chat-key:" + matchDetails.matchId) || "null");
+        return !!(v && /^[0-9a-f]{64}$/.test(v.k || ""));
+    } catch (e) {
+        return false;
+    }
+}
+
 class ChatMsg{
     constructor(txt="",player=0){
         var ps = $("#player-pseudo").val();
@@ -304,6 +381,9 @@ class ChatMsg{
             time : Date.now(),
             key : makeid(8)
         }
+        // Ce que CE poste affiche (texte ouvert, pseudo ouvert, etat). Jamais
+        // envoye : publish() ne serialise que `data`.
+        this.view = null;
     }
     loadFromData(newdata){
         this.data = newdata.data;
@@ -334,7 +414,9 @@ class ChatMsg{
     }
     html(){
         var cn = "cm-player-" + ((this.data.player == Jocly.PLAYER_A) ? "a" : "b") ;
-        var pseudo = (typeof this.data.pseudo == "string") ? this.data.pseudo : "";
+        var v = this.view || {};
+        var pseudo = (typeof v.pseudo == "string") ? v.pseudo
+            : (typeof this.data.pseudo == "string") ? this.data.pseudo : "";
         var pn = (pseudo.length > 0)?pseudo:(this.data.player == Jocly.PLAYER_A)?t("Player A"):t("Player B");
         var d = new Date(this.data.time);
         var id = this.getId();
@@ -345,7 +427,7 @@ class ChatMsg{
         // Les messages systeme (player == 0) sont generes localement par le
         // code (informUserInChatroom / NotifyWinner) et contiennent des liens
         // HTML voulus : eux seuls restent inseres tels quels, comme avant.
-        var body = escapeHtml(this.data.msg);
+        var body = escapeHtml(typeof v.text == "string" ? v.text : this.data.msg);
 
         // CORPS SCELLE : `enc` marque un message chiffre par son auteur (voir
         // le format de Tabulon). joclymatch n'a pas la cle, et afficher le
@@ -353,9 +435,19 @@ class ChatMsg{
         // pour un defaut. On montre qu'un message existe et qu'il manque de
         // quoi le lire -- un trou silencieux dans une conversation serait
         // pire.
-        if (this.data.enc){
+        if (this.data.enc && typeof v.text != "string"){
             cn += " cm-sealed";
-            body = "🔒 " + escapeHtml(t("Encrypted message — this client has no key to read it."));
+            body = "🔒 " + escapeHtml(t(v.state == "badkey"
+                ? "Encrypted message — it does not open with this game's key."
+                : "Encrypted message — this client has no key to read it."));
+        }
+        // Recu EN CLAIR dans une partie protegee : un correspondant dont
+        // l'application n'a pas la cle (lien sans fragment, ancien client).
+        // On le montre -- le cacher couperait la conversation -- mais on dit
+        // qu'il n'etait pas protege, et que lui ne nous lit sans doute pas.
+        if (v.state == "unprotected"){
+            cn += " cm-unprotected";
+            body += " <span class='cm-tag'>" + escapeHtml(t("(sent without protection)")) + "</span>";
         }
 
         // system msgs
@@ -378,7 +470,9 @@ class ChatData{
     }
     publish(msg,bSendToServeur=true){
         this.msgs.push(msg);
-        var chatdata = JSON.stringify(msg);
+        // `data` SEUL : `view` porte le texte en clair de ce poste et ne doit
+        // jamais partir vers le relai.
+        var chatdata = JSON.stringify({ data: msg.data });
         console.log("sending chatdata",chatdata);
         $("#bottom-container").append(msg.html());
         scrollDownChatRoom();
@@ -429,6 +523,7 @@ class ChatData{
                             var id = "#"+msg.getId();
                             if($(id).length==0){
                                 // not found, add it
+                                prepareReceivedChatMsg(msg);
                                 $("#bottom-container").append(msg.html());
                                 nbAdded ++;
                             }
@@ -455,9 +550,48 @@ class ChatData{
 }
 var chatRoom = new ChatData();
 
+/**
+ * Prepare l'affichage d'un message relu sur le relai.
+ *
+ * Scelle : on l'ouvre si l'on a la cle (`opened`), sinon il reste visible et
+ * verrouille (`locked` sans cle, `badkey` si notre cle ne l'ouvre pas). En
+ * clair dans une partie protegee : `unprotected`. Les messages rapides de
+ * Tabulon (`quick`) sont en clair PAR CONCEPTION -- ils ne portent aucun texte
+ * personnel -- et ne sont donc pas signales.
+ */
+function prepareReceivedChatMsg(msg){
+    var d = msg.data || {};
+    var s = chatSealer();
+    if (d.enc){
+        if (!s){ msg.view = { state: "locked" }; return; }
+        var text = s.open(d.msg);
+        if (text === null){ msg.view = { state: "badkey" }; return; }
+        var pseudo = (typeof d.pseudoEnc == "string") ? s.open(d.pseudoEnc) : null;
+        msg.view = { text: text, pseudo: (pseudo === null) ? undefined : pseudo, state: "opened" };
+        return;
+    }
+    if (s && d.player != 0 && typeof d.quick != "string") msg.view = { state: "unprotected" };
+}
+
 function chatPush(msg){
     if (msg.length > 0){
         var m = new ChatMsg(msg,iamPlayer);
+        var s = chatSealer();
+        if (s){
+            var ps = m.data.pseudo;
+            m.view = { text: msg, pseudo: ps, state: "opened" };
+            m.data.msg = s.seal(msg);
+            m.data.enc = 1;
+            delete m.data.pseudo;
+            if (ps) m.data.pseudoEnc = s.seal(ps);
+        } else if (chatKeyExpected()){
+            // La partie est protegee mais le chiffrement n'a pas pu se charger
+            // (navigateur trop ancien, fichier manquant). Envoyer en clair un
+            // message que son auteur croit protege serait pire que de ne rien
+            // envoyer : on refuse, et on le dit.
+            informUserInChatroom(escapeHtml(t("Message not sent: this browser could not load the encryption this game requires.")));
+            return;
+        }
         chatRoom.publish(m)
         //$("#chat-input-field")
     }
@@ -468,6 +602,33 @@ function scrollDownChatRoom(){
         s.scrollTop(s.prop("scrollHeight") - s.height());
     }
 }
+/**
+ * L'etat de protection de la conversation, en un mot a cote de « Mon nom »,
+ * l'explication en infobulle. Rien d'autre a l'ecran ne distingue une
+ * conversation protegee d'une conversation qui ne l'est pas.
+ */
+function updateChatProtection(){
+    var el = $("#chat-protection");
+    if (!el.length) return;
+    var kid = window.joclyChatSeal && window.joclyChatSeal.chatKeyId;
+    var label, why, cls;
+    if (chatSealer()){
+        label = "🔒 " + t("Protected"); cls = "protected";
+        why = t("Protected conversation: messages are encrypted in this page before they leave it, and the relay cannot read them.");
+    } else if (chatKeyExpected()){
+        label = t("Protection unavailable"); cls = "broken";
+        why = t("This game is protected, but this browser could not load the encryption: messages are not sent.");
+    } else if (kid){
+        label = t("Not protected"); cls = "unprotected";
+        why = t("This invitation uses a Tabulon community key, which joclymatch does not have: your messages are sent without protection.");
+    } else {
+        label = t("Not protected"); cls = "unprotected";
+        why = t("Unprotected conversation: whoever runs the relay can read the messages.");
+    }
+    el.text(label).attr("title", why).attr("class", "chat-protection " + cls);
+}
+window.addEventListener("jocly-chat-seal-ready", function(){ updateChatProtection(); });
+
 function informUserInChatroom(text){
     var msg = new ChatMsg(text,0); // 0 = system
     chatRoom.publish(msg,false);
@@ -700,6 +861,7 @@ $(document).ready(function () {
 
     document.addEventListener('keydown', handleKey, false);
     
+    updateChatProtection();
     chatRoom.reload();
     chatRoom.startRefreshPolling(3000);
     
@@ -1049,6 +1211,24 @@ var translations = {
     "About this site" : {fr : "À propos de ce site"},
     "Encrypted message — this client has no key to read it." :
         {fr : "Message chiffré — ce client n'a pas la clé pour le lire."},
+    "Encrypted message — it does not open with this game's key." :
+        {fr : "Message chiffré — il ne s'ouvre pas avec la clé de cette partie."},
+    "(sent without protection)" : {fr : "(envoyé sans protection)"},
+    "This game and its conversation will be deleted from the server when you close this page." :
+        {fr : "Cette partie et sa conversation seront effacées du serveur à la fermeture de cette page."},
+    "Message not sent: this browser could not load the encryption this game requires." :
+        {fr : "Message non envoyé : ce navigateur n'a pas pu charger le chiffrement qu'exige cette partie."},
+    "Protected" : {fr : "Protégée"},
+    "Not protected" : {fr : "Non protégée"},
+    "Protection unavailable" : {fr : "Protection indisponible"},
+    "Protected conversation: messages are encrypted in this page before they leave it, and the relay cannot read them." :
+        {fr : "Conversation protégée : les messages sont chiffrés dans cette page avant de la quitter, et le relai ne peut pas les lire."},
+    "This game is protected, but this browser could not load the encryption: messages are not sent." :
+        {fr : "Cette partie est protégée, mais ce navigateur n'a pas pu charger le chiffrement : les messages ne sont pas envoyés."},
+    "This invitation uses a Tabulon community key, which joclymatch does not have: your messages are sent without protection." :
+        {fr : "Cette invitation emploie une clé de communauté Tabulon, que joclymatch n'a pas : vos messages partent sans protection."},
+    "Unprotected conversation: whoever runs the relay can read the messages." :
+        {fr : "Conversation non protégée : qui gère le relai peut lire les messages."},
     "Sorry, no rules available for" : {fr : "Désolé, aucune règle disponible pour"},
     "Take back my last move" : {fr : "Reprendre mon dernier coup"},
     "Take back your last move? Your opponent's reply is undone too, and their board will change." :
@@ -1101,6 +1281,7 @@ function setLanguage(newlg){
         // Le titre du jeu vient de jocly, pas de la table de traductions :
         // la boucle ci-dessus ne le touche pas.
         if (gameModel) updateGameTitle();
+        updateChatProtection();
         // Les regles non plus : elles sont un fichier HTML par langue, qu'il
         // faut recharger et non retraduire.
         loadRulesForLanguage();

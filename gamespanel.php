@@ -1,3 +1,17 @@
+<?php
+// localconf.php est charge ICI, AVANT toute sortie, comme dans index.php :
+// sous tampon (un BOM ou un avertissement qu'il emettrait n'a pas a finir dans
+// la page), puis verifie. Il etait charge au milieu du <body>, de sorte qu'un
+// fichier illisible y deversait son contenu et des avertissements PHP au
+// milieu du JavaScript -- page cassee, sans rien dire de la cause.
+ob_start();
+@include "localconf.php";
+ob_end_clean();
+require __DIR__ . "/localconf-check.php";
+$localconfProblem = localconfProblem(localconfMissing(get_defined_vars(),
+    array('joclyDistPath', 'joclyPlayerURL', 'joclyMatchURL')));
+if ($localconfProblem !== null) localconfFailPage($localconfProblem);
+?>
 <!doctype html>
 
 <html lang="en">
@@ -59,7 +73,6 @@
     </div>
     <div id="games-panel"></div>
 
-    <?php require "localconf.php" ?>
     <script src="<?php echo($joclyDistPath);?>"></script>
     <script src="js/jquery-3.7.1.min.js"></script>
     <script>

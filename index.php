@@ -11,8 +11,13 @@
 // Meme precaution que fileio.php : un localconf.php qui emet un BOM, une
 // ligne vide ou un avertissement n'a pas a l'inserer avant le doctype.
 ob_start();
-require "localconf.php";
+@include "localconf.php";
 ob_end_clean();
+// Un localconf.php illisible (UTF-16, absent, incomplet) : le dire, au lieu
+// d'une page de jeu qui ne charge rien. Voir localconf-check.php.
+require __DIR__ . "/localconf-check.php";
+$localconfProblem = localconfProblem(localconfMissing(get_defined_vars(), array('joclyDistPath')));
+if ($localconfProblem !== null) localconfFailPage($localconfProblem);
 
 // Base absolue, avec ou sans barre finale dans localconf.php. Le README la
 // demande ; s'en remettre a la bonne volonte du fichier de configuration pour
@@ -61,7 +66,7 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 		<div id="chattab">
 			<div id="panel-chat">
 				<div id="prev-msgs"><div id="bottom-container"></div></div>
-				<div id="pseudo-div"><span class="t">My name</span> : <input id="player-pseudo" value=""></input></div>
+				<div id="pseudo-div"><span id="chat-protection" class="chat-protection"></span><span class="t">My name</span> : <input id="player-pseudo" value=""></input></div>
 				<div id="chat-input"><textarea rows="3" id="chat-input-field"></textarea></div>
 			</div>
 		</div>
@@ -190,6 +195,10 @@ if ($joclyMatchBase === '') $joclyMatchBase = '.';
 
 	</script>
 		
+	<!-- Chiffrement des messages (module ES, differe) : il lit la cle dans le
+	     fragment du lien (#k=...) et pose window.joclyChatSeal avant que la
+	     page ne soit prete. Voir js/chat-seal.js. -->
+	<script type="module" src="js/chat-seal.js"></script>
 	<script src="js/common.js"></script>
     <script src="js/control.js"></script>
 	<?php

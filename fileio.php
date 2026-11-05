@@ -7,8 +7,21 @@
 // tampon et on jette tout ce qu'il aurait pu ecrire : un localconf sain
 // n'ecrit rien, donc aucun changement pour lui.
 ob_start();
-require "localconf.php";
+@include "localconf.php";
 ob_end_clean();
+
+// SANS $savePath, chaque fichier de partie s'ecrirait a cote de ce script, sous
+// la racine web -- en silence, puisque la sortie de localconf.php est jetee.
+// On refuse donc, en JSON (c'est ce que lisent les clients), avec la cause :
+// fichier absent, enregistre en UTF-16, ou reglage manquant.
+require __DIR__ . "/localconf-check.php";
+$localconfProblem = localconfProblem(localconfMissing(get_defined_vars(), array('savePath')));
+if ($localconfProblem !== null) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(array("error" => "server configuration", "detail" => $localconfProblem));
+    exit;
+}
 
 // Reglages, tous surchargeables depuis localconf.php.
 //
@@ -111,8 +124,18 @@ function chatfileName($matchId){
 // mutualise, donc le seul moment ou l'on peut faire le tri est une requete
 // ordinaire. On en profite pour regarder quelques fichiers -- pas tout le
 // repertoire, sous peine de faire payer a un joueur le menage de mille
-// parties. Sur un serveur actif, quarante par requete suffisent largement a
-// suivre le rythme des creations.
+// parties : quarante par requete.
+//
+// QUARANTE TIRES AU HASARD, PAS LES QUARANTE PREMIERS. readdir() rend les
+// entrees dans un ordre STABLE d'un appel a l'autre (ordre de hachage sur
+// ext4). Ne regarder que les quarante premieres revenait donc a regarder
+// toujours les memes : des qu'elles etaient toutes recentes, plus rien n'etait
+// jamais efface. Mesure sur ext4 avec 300 parties actives et 300 expirees :
+// 267 expirees encore la apres 1 000 enregistrements, et plus aucune
+// suppression des le 10e. Le tirage garde la borne de quarante verifications
+// et fait passer chaque fichier a son tour : avec 600 fichiers, il n'en reste
+// plus aucun d'expire apres quelques centaines de requetes. scandir() lit tous
+// les NOMS (pas les fichiers) : quelques millisecondes pour dix mille parties.
 //
 // Les deux familles de fichiers sont balayees ensemble : un "-chat.txt" est
 // aussi un ".txt", et le laisser derriere serait garder la conversation d'une
@@ -122,35 +145,29 @@ function sweepOldFiles(){
     if (!is_dir($savePath)) {
         return;
     }
-    $dh = @opendir($savePath);
-    if (!$dh) {
+    $names = @scandir($savePath);
+    if (!$names) {
         return;
     }
-    $seen = 0;
-    $cutoff = time() - $saveTTL;
-    while (($f = readdir($dh)) !== false && $seen < 40) {
+    $candidates = array();
+    foreach ($names as $f) {
         // Les temporaires d'une ecriture atomique interrompue (le fichier
         // s'appelle <partie>.txt.tmp<unique>) ne portent pas l'extension et
         // n'etaient donc effaces par personne : une coupure au mauvais moment
         // laissait un fichier a vie. La borne de temps est la meme, largement
         // au-dela de la duree d'un rename().
-        if (strpos($f, '.tmp') !== false) {
-            $seen++;
-            if (@filemtime($savePath . $f) < $cutoff) {
-                @unlink($savePath . $f);
-            }
-            continue;
+        if (strpos($f, '.tmp') !== false || substr($f, -4) === '.txt') {
+            $candidates[] = $f;
         }
-        if (substr($f, -4) !== '.txt') {
-            continue;
-        }
-        $seen++;
+    }
+    shuffle($candidates);
+    $cutoff = time() - $saveTTL;
+    foreach (array_slice($candidates, 0, 40) as $f) {
         $p = $savePath . $f;
         if (@filemtime($p) < $cutoff) {
             @unlink($p);
         }
     }
-    closedir($dh);
 }
 
 // games

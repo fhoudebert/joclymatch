@@ -84,16 +84,31 @@ function copy2Clipboard(player) {
 // Identifiant du match dont les liens sont affiches : cocher ou decocher la
 // reprise apres coup reconstruit les MEMES liens, sans changer de match.
 var currentMid = "";
+// Cle de discussion du match (voir js/chat-seal.js), dans le FRAGMENT des
+// deux liens : le navigateur ne l'envoie jamais au serveur. Vide si aucun
+// alea sur n'est disponible -- un lien sans cle vaut mieux qu'une cle
+// devinable, qui donnerait l'apparence d'une protection.
+var currentChatKey = "";
+
+function newChatKey(){
+    if (typeof crypto === "undefined" || typeof crypto.getRandomValues !== "function") return "";
+    var bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    var hex = "";
+    for (var i = 0; i < bytes.length; i++) hex += (bytes[i] < 16 ? "0" : "") + bytes[i].toString(16);
+    return hex;
+}
 
 function showMatchLinks(){
     // tb est TOUJOURS ecrit, 1 comme 0 : un lien qui ne dit rien est celui
     // d'un client ancien, pas un choix.
     var tb = $("#allow-takeback").prop("checked") ? "1" : "0";
     var link=matchRootURL+"index.php?game="+selectedGame+"&mid="+currentMid+"&tb="+tb;
-    $("#linka").attr("value",link+"&player=a");
-    $("#linkb").attr("value",link+"&player=b");
-    $("#goplaya").attr("href",link+"&player=a");
-    $("#goplayb").attr("href",link+"&player=b");
+    var frag = currentChatKey ? "#k="+currentChatKey : "";
+    $("#linka").attr("value",link+"&player=a"+frag);
+    $("#linkb").attr("value",link+"&player=b"+frag);
+    $("#goplaya").attr("href",link+"&player=a"+frag);
+    $("#goplayb").attr("href",link+"&player=b"+frag);
 }
 
 function createMatch(){
@@ -103,6 +118,7 @@ function createMatch(){
         console.log("creating match");
         $("#match-area").show();
         currentMid = Date.now()+"-"+makeid(14);
+        currentChatKey = newChatKey();
         showMatchLinks();
     }
 }
@@ -117,6 +133,7 @@ function selectGame(name){
     // clear and close match area if open
     $("#match-area").hide();
     currentMid = "";
+    currentChatKey = "";
     $("#linka").attr("value","");
     $("#linkb").attr("value","");
 

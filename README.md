@@ -7,14 +7,14 @@ A tiny, self-hostable game server to play [Jocly](https://github.com/fhoudebert/
 - **Play against the computer** — pick a game from the panel and play solo.
 - **Play with a friend** — create a match and get two links: one for player A, one for player B. Send the other link to your opponent and play at your own pace.
 - **Read the rules** — every game comes with its rules, available directly in the interface.
-- **Chat** — a simple in-match chat between the two players.
+- **Chat** — a simple in-match chat between the two players, **encrypted** for matches created from the panel: the relay stores only text it cannot read (see [Chat protection](#chat-protection)).
 - **Take back a move** — optional, chosen when the match is created ("Allow taking back moves", off by default). When allowed, a player can, on their own turn, take back their last move together with the opponent's reply, and the opponent's board follows.
 - **Save / snapshot** — export a match as a JSON file, or take a picture of the board.
 
 ## Design choices (features or limitations, you decide)
 
 - **No database.** All you need is a web server with PHP. Matches are stored as plain, human-readable JSON text files.
-- **No login, no password.** Absolutely no personal data is stored — only the moves played (and the chat messages) of each match.
+- **No login, no password.** Absolutely no personal data is stored — only the moves played (and the chat messages, encrypted, see below) of each match.
 - **No ads, no tracking.**
 - **Honor system.** Anyone who has a link can play that side of the board. You *could* cheat by opening both links… but we are gentlemen, aren't we?
 - **Simple polling by default.** The board refreshes with a classic periodic HTTP polling, which works on any shared PHP hosting. Optional faster modes exist (see below).
@@ -26,7 +26,7 @@ Requirements: any web server able to run PHP. No database, no framework, no buil
 1. Copy the content of this repository to your web server.
 2. Get a Jocly distribution (the `jocly.js` bundle and its games) from [jocly2](https://github.com/fhoudebert/jocly2) and make it reachable from your site.
 3. Create a writable directory for match files, e.g. `saves/` (the web server user must be able to write to it).
-4. Create a `localconf.php` file at the root of the site:
+4. Copy `localconf.php.example` to `localconf.php` at the root of the site and adapt it. The four settings below are required; the file also lists, with their default values, the optional ones described next (match lifetime, long-polling, push):
 
 ```php
 <?php
@@ -43,9 +43,13 @@ $joclyDistPath  = "dist/browser/jocly.js";
 $savePath       = "saves/";
 ```
 
+   **Save `localconf.php` as UTF-8 without BOM** (the example is plain ASCII). Some editors silently switch to UTF-16 as soon as a character does not fit their default charset; PHP then does not read the file at all, and no setting is applied. In that case — and if the file is missing or a required setting is absent — the pages say so plainly (an HTML page explaining the cause, a JSON error from `fileio.php`) instead of breaking; to convert: `iconv -f UTF-16 -t UTF-8 localconf.php > localconf.tmp && mv localconf.tmp localconf.php`.
+
 5. Open `gamespanel.php` in your browser, pick a game, and play!
 
 ### Optional settings
+
+All of them are in `localconf.php.example`, with their default values.
 
 Match and chat files used to accumulate forever: nothing ever deleted them, and
 the only way to reclaim space was to remove them by hand. They now expire, and
@@ -89,6 +93,17 @@ POST gameioaction=drop  gameid=<id>     -> {"ok":true}
 
 which removes the match file and its chat log together.
 
+**This client does it for you.** When a game ends on a move *received* from
+the other player, the page deletes the match (`drop`) **when it is closed** —
+with `navigator.sendBeacon` on `pagehide`, since an ordinary request sent while
+a page closes is not guaranteed to leave. Only the player who received the
+last move does it: they know both sides have seen the end, whereas the one who
+played it does not, and deleting from that side could remove the move before
+the other reads it. On close rather than at the end, so that what is said
+after the last move stays readable while the page is open; the end-of-game
+message says so. Same rule as Tabulon and mogichex. If that player never comes
+back, `$saveTTL` does the cleaning.
+
 Saving a chat message answers `{"ok":true,"trimmed":n}`, where `n` counts the
 oldest messages dropped to make room for this one — zero almost always. Two
 refusals remain, and they do not call for the same reaction: **413**
@@ -119,7 +134,8 @@ the server:
 |---|---|
 | `msg` | the text, **or** a base64 seal when `enc` is set |
 | `player` | `1` / `-1`, or `0` for service messages |
-| `pseudo` | display name, free text |
+| `pseudo` | display name, free text — **absent** from sealed messages |
+| `pseudoEnc` | optional: the display name, sealed with the same key (joclymatch only; other clients show the side) |
 | `time`, `key` | `time + "-" + key` is the message id |
 | `kind` | optional: `chat` when absent, else `presence`, `nudge`, … |
 | `quick`, `state` | optional: identifiers translated by the reader |
@@ -128,8 +144,9 @@ the server:
 **What this client does with what it does not understand.** An unknown `kind` is
 skipped in silence, so a fourth kind can be added without breaking installed
 clients. A message with no textual `msg` is skipped rather than shown as
-`undefined`. A sealed body (`enc:1`) is shown as a padlock and an explanation,
-never as raw base64 — a message you cannot read is still worth knowing about. A
+`undefined`. A sealed body (`enc:1`) is opened when the page has the match key;
+otherwise it is shown as a padlock and an explanation, never as raw base64 — a
+message you cannot read is still worth knowing about. A
 missing `pseudo` falls back to "Player A" / "Player B".
 
 **Taking back moves.** Whether a match allows it is a setting of the *match*,
@@ -158,6 +175,54 @@ Two things are worth knowing if you write the other end: a message must be **one
 line** (the server reads the file line by line and rejects `\r` or `\n` with a
 400), and `msg` is what a client that ignores `quick` will display — leaving it
 empty puts an empty bubble in the thread.
+
+## Chat protection
+
+**What it protects, and from whom.** This relay has no accounts: whoever runs
+the server, and whoever knows a match id, can read what is stored. So the chat
+text of a match created from the games panel is **sealed in the browser before
+it leaves the page**, and the server only ever stores opaque bytes.
+
+- **The key.** `gamespanel.js` draws 32 random bytes per match and puts them in
+  the **fragment** of both links: `index.php?…&player=a#k=<64 hex chars>`. A
+  browser never sends the fragment to the server — not to `index.php`, not to
+  `fileio.php`, not in a `Referer` header. Whoever has the full link has the key:
+  send links privately, as you already do.
+- **The seal.** XChaCha20-Poly1305 with a random 192-bit nonce per message,
+  `msg = base64(nonce ‖ ciphertext ‖ tag)` and `enc: 1` — byte for byte the
+  format of Tabulon and mogichex, so the three applications read each other in
+  a shared match. The cipher is [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers)
+  2.4.0 (MIT), vendored unmodified in `js/vendor/noble-ciphers/` (see its
+  `PROVENANCE.md`), loaded by `js/chat-seal.js` as an ES module.
+- **The name.** In a protected match the display name is sealed too
+  (`pseudoEnc`) instead of travelling in clear with every message.
+- **What stays visible to the server**: who writes (the side), when, the length
+  of each message, Tabulon's quick messages and presence flags (they carry no
+  personal text, by design), and the moves.
+- **What the chat panel shows**: "🔒 Protected" / "Not protected" next to
+  *My name*, with the explanation as a tooltip. A message received **in clear**
+  in a protected match (an old client, a link that lost its fragment) is shown
+  and marked "(sent without protection)". A sealed message that does not open
+  with the match key says so. If the page has a key but the browser could not
+  load the encryption, messages are **not sent** rather than sent in clear.
+- **Rematch** links offered at the end of a game keep the key.
+- **The key leaves the address bar once read.** `js/chat-seal.js` stores it in
+  `sessionStorage` — per **tab**, cleared when the tab closes — under the match
+  id (`joclymatch-chat-key:<mid>`), then removes `k`/`kid` from the fragment
+  with `history.replaceState`. A reload finds it there; another tab opened on
+  the cleaned address does not. So the key no longer shows on a shared screen,
+  nor travels with an address copied from the bar. If storage is unavailable,
+  the fragment is **left** in place (losing the key on the first reload would
+  be worse). What it does **not** do: erase the browser's history, which keeps
+  the visited address, key included (checked on Chromium) — like the message
+  that carried the link.
+- **Not covered**: a Tabulon *community key* (`#kid=` in the link) — joclymatch
+  has no keyring, so such a match is shown as not protected; an older link
+  without a key stays unprotected, as before.
+
+Tests: `node tests/test-chat-seal.mjs` (no dependency) checks the seal, and
+opens a message sealed by mogichex — the same vector Tabulon checks in its own
+tests — so the three implementations are known to agree.
 
 ## Optional: faster move notifications
 
