@@ -4,8 +4,12 @@
 // Ce fichier N'A PAS de balise PHP fermante, et c'est voulu : le moindre octet
 // emis apres elle (ligne vide, espace, BOM) se retrouverait devant le JSON de
 // fileio.php et ferait echouer le JSON.parse() des clients.
+//
+// L'ENREGISTRER EN UTF-8 SANS BOM (ou en ASCII, comme ce modele). En UTF-16 --
+// ce que certains editeurs choisissent d'eux-memes --, PHP ne le lit pas du
+// tout : aucun reglage n'est pris en compte, et la page le dit.
 
-// ── Obligatoire ──────────────────────────────────────────────────────────────
+// --- Obligatoire -------------------------------------------------------------
 
 // Adresse de cette installation de joclymatch (barre finale comprise).
 $joclyMatchURL  = "https://example.org/joclymatch/";
@@ -21,7 +25,7 @@ $joclyDistPath  = "dist/browser/jocly.js";
 // l'hebergeur le permet.
 $savePath       = "saves/";
 
-// ── Duree de vie des parties et des discussions ──────────────────────────────
+// --- Duree de vie des parties et des discussions -----------------------------
 //
 // Facultatif : les valeurs ci-dessous sont celles qu'on obtient sans rien
 // ecrire. Elles ne sont rappelees ici que pour etre faciles a retrouver.
@@ -47,9 +51,9 @@ $chatTrimOldest = true;
 // reecrire tout le fichier a chaque message.
 $chatTrimTo     = 196608;           // 192 Ko (75 % de $chatMaxBytes)
 
-// ── Facultatif : coups adverses plus rapides ─────────────────────────────────
+// --- Facultatif : coups adverses plus rapides --------------------------------
 //
-// Desactive par defaut. Voir le README, « Optional: faster move notifications ».
+// Desactive par defaut. Voir le README, "Optional: faster move notifications".
 
 // Attente longue : le serveur retient la reponse jusqu'a un coup (20 s au
 // plus). Seulement si les processus PHP de l'hebergement peuvent tenir des

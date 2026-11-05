@@ -7,8 +7,21 @@
 // tampon et on jette tout ce qu'il aurait pu ecrire : un localconf sain
 // n'ecrit rien, donc aucun changement pour lui.
 ob_start();
-require "localconf.php";
+@include "localconf.php";
 ob_end_clean();
+
+// SANS $savePath, chaque fichier de partie s'ecrirait a cote de ce script, sous
+// la racine web -- en silence, puisque la sortie de localconf.php est jetee.
+// On refuse donc, en JSON (c'est ce que lisent les clients), avec la cause :
+// fichier absent, enregistre en UTF-16, ou reglage manquant.
+require __DIR__ . "/localconf-check.php";
+$localconfProblem = localconfProblem(localconfMissing(get_defined_vars(), array('savePath')));
+if ($localconfProblem !== null) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(array("error" => "server configuration", "detail" => $localconfProblem));
+    exit;
+}
 
 // Reglages, tous surchargeables depuis localconf.php.
 //

@@ -11,8 +11,13 @@
 // Meme precaution que fileio.php : un localconf.php qui emet un BOM, une
 // ligne vide ou un avertissement n'a pas a l'inserer avant le doctype.
 ob_start();
-require "localconf.php";
+@include "localconf.php";
 ob_end_clean();
+// Un localconf.php illisible (UTF-16, absent, incomplet) : le dire, au lieu
+// d'une page de jeu qui ne charge rien. Voir localconf-check.php.
+require __DIR__ . "/localconf-check.php";
+$localconfProblem = localconfProblem(localconfMissing(get_defined_vars(), array('joclyDistPath')));
+if ($localconfProblem !== null) localconfFailPage($localconfProblem);
 
 // Base absolue, avec ou sans barre finale dans localconf.php. Le README la
 // demande ; s'en remettre a la bonne volonte du fichier de configuration pour

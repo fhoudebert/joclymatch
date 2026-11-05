@@ -43,6 +43,8 @@ $joclyDistPath  = "dist/browser/jocly.js";
 $savePath       = "saves/";
 ```
 
+   **Save `localconf.php` as UTF-8 without BOM** (the example is plain ASCII). Some editors silently switch to UTF-16 as soon as a character does not fit their default charset; PHP then does not read the file at all, and no setting is applied. In that case — and if the file is missing or a required setting is absent — the pages say so plainly (an HTML page explaining the cause, a JSON error from `fileio.php`) instead of breaking; to convert: `iconv -f UTF-16 -t UTF-8 localconf.php > localconf.tmp && mv localconf.tmp localconf.php`.
+
 5. Open `gamespanel.php` in your browser, pick a game, and play!
 
 ### Optional settings
