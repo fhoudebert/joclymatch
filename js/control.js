@@ -23,6 +23,9 @@ function NotifyWinner(winner) {
 
     // propose new game
     var html = t("End of game")+" : "+"<div class='winner-message'>"+text+"</div>";
+    // Le dire : sinon la partie disparait du serveur sans que personne l'ait annonce.
+    if (relayDropArmed)
+        html += "<div class='drop-notice'>"+escapeHtml(t("This game and its conversation will be deleted from the server when you close this page."))+"</div>";
     html += t("Start a new game?")+"<br>";
     html += "<a href=\""+link+"a"+frag+"\">"+t("Play A")+"</a>"
     html += " • ";
@@ -85,6 +88,40 @@ function refreshTakebackButtons(match){
         $("#takeback").toggle(allowed && moves.length >= 2);
     });
 }
+
+/*
+ * EFFACER LA PARTIE DU RELAI, UNE FOIS FINIE.
+ *
+ * Une partie terminee n'a plus rien a faire sur le serveur, ni son etat ni sa
+ * conversation : fileio.php sait les effacer ensemble (gameioaction=drop).
+ *
+ * SEUL CELUI QUI A RECU LE DERNIER COUP efface : il sait que les deux cotes
+ * ont vu la fin. Celui qui l'a joue ne le sait pas -- effacer de son cote
+ * pourrait retirer le coup avant que l'autre l'ait lu. S'il ne revient
+ * jamais, la duree de vie du relai ($saveTTL, 30 jours) fait le menage.
+ * Meme regle que Tabulon et mogichex.
+ *
+ * QUAND LA PAGE SE FERME, pas a la fin de la partie : les mots echanges apres
+ * le dernier coup restent lisibles tant qu'elle est ouverte. `pagehide` et
+ * sendBeacon, parce qu'une requete ordinaire lancee a la fermeture d'une page
+ * n'a aucune garantie de partir ; le navigateur envoie un beacon meme apres.
+ */
+var relayDropArmed = false;
+function armRelayDrop(){
+    relayDropArmed = true;
+}
+function sendRelayDrop(){
+    if (!relayDropArmed || !matchDetails.matchId.length) return;
+    relayDropArmed = false;
+    var fd = new FormData();
+    fd.append("gameioaction", "drop");
+    fd.append("gameid", matchDetails.matchId);
+    if (navigator.sendBeacon && navigator.sendBeacon("./fileio.php", fd)) return;
+    // Repli : meme garantie de partir apres la page, sur les navigateurs qui
+    // ont fetch keepalive mais refusent le beacon.
+    try { fetch("./fileio.php", { method: "POST", body: fd, keepalive: true }); } catch (e) {}
+}
+window.addEventListener("pagehide", sendRelayDrop);
 
 var reloadCounter = 0 ;
 function checkIfOtherUserPlayed(delay) {
@@ -194,8 +231,13 @@ function RunMatch(match, progressBar) {
                     .then((result) => {
                         movePending = null;
                         movePendingResolver();
-                        if (result.finished)
+                        if (result.finished){
+                            // Fin arrivee pendant le tour de l'ADVERSAIRE :
+                            // c'est son coup, recu du serveur, qui termine la
+                            // partie -- les deux cotes l'ont vu.
+                            if (player != iamPlayer) armRelayDrop();
                             NotifyWinner(result.winner);
+                        }
                         else
                             NextMove();
                         })
@@ -1172,6 +1214,8 @@ var translations = {
     "Encrypted message — it does not open with this game's key." :
         {fr : "Message chiffré — il ne s'ouvre pas avec la clé de cette partie."},
     "(sent without protection)" : {fr : "(envoyé sans protection)"},
+    "This game and its conversation will be deleted from the server when you close this page." :
+        {fr : "Cette partie et sa conversation seront effacées du serveur à la fermeture de cette page."},
     "Message not sent: this browser could not load the encryption this game requires." :
         {fr : "Message non envoyé : ce navigateur n'a pas pu charger le chiffrement qu'exige cette partie."},
     "Protected" : {fr : "Protégée"},

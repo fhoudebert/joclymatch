@@ -323,3 +323,10 @@ html,body {
     font-style: italic;
     margin: 4px 0;
 }
+/* Annonce de l'effacement de la partie en fin de partie. */
+.drop-notice {
+    font-size: 11px;
+    font-style: italic;
+    opacity: .8;
+    margin: 4px 0;
+}

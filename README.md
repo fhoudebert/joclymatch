@@ -89,6 +89,17 @@ POST gameioaction=drop  gameid=<id>     -> {"ok":true}
 
 which removes the match file and its chat log together.
 
+**This client does it for you.** When a game ends on a move *received* from
+the other player, the page deletes the match (`drop`) **when it is closed** —
+with `navigator.sendBeacon` on `pagehide`, since an ordinary request sent while
+a page closes is not guaranteed to leave. Only the player who received the
+last move does it: they know both sides have seen the end, whereas the one who
+played it does not, and deleting from that side could remove the move before
+the other reads it. On close rather than at the end, so that what is said
+after the last move stays readable while the page is open; the end-of-game
+message says so. Same rule as Tabulon and mogichex. If that player never comes
+back, `$saveTTL` does the cleaning.
+
 Saving a chat message answers `{"ok":true,"trimmed":n}`, where `n` counts the
 oldest messages dropped to make room for this one — zero almost always. Two
 refusals remain, and they do not call for the same reaction: **413**
