@@ -109,6 +109,33 @@ touch($stray, time() - 7200);
 request(array('gameioaction' => 'save', 'gameid' => $id . 'sweep2', 'gamedata' => '{}'), 3600);
 check('un temporaire abandonne est efface aussi', !file_exists($stray));
 
+// Le cas qui avait echappe : un relai qui heberge PLUS de quarante parties.
+// Le menage regardait toujours les quarante memes fichiers (ordre stable de
+// readdir) ; une fois celles-la toutes recentes, plus rien n'etait efface.
+// 120 parties actives et 60 expirees, puis 80 enregistrements : il ne doit
+// plus rester une seule expiree. (Au hasard, la probabilite d'en laisser une
+// est de l'ordre de 60 x (1 - 40/180)^80, soit moins de 1e-7.)
+$crowd = $tmp . 'crowd/';
+@mkdir($crowd, 0775, true);
+for ($i = 0; $i < 120; $i++) {
+    file_put_contents($crowd . 'live' . $i . '.txt', '{}');
+}
+for ($i = 0; $i < 60; $i++) {
+    file_put_contents($crowd . 'gone' . $i . '.txt', '{}');
+    touch($crowd . 'gone' . $i . '.txt', time() - 7200);
+}
+$tmpSave = $tmp;
+$tmp = $crowd;
+for ($i = 0; $i < 80; $i++) {
+    request(array('gameioaction' => 'save', 'gameid' => 'live' . ($i % 120), 'gamedata' => '{}'), 3600);
+}
+$tmp = $tmpSave;
+check('avec plus de 40 parties, toutes les expirees finissent effacees',
+    count(glob($crowd . 'gone*.txt')) === 0);
+check('et aucune partie active n\'a ete touchee', count(glob($crowd . 'live*.txt')) === 120);
+array_map('unlink', glob($crowd . '*'));
+@rmdir($crowd);
+
 // --- le fil de chat ----------------------------------------------------------
 
 $cid = 'chat-' . getmypid();
