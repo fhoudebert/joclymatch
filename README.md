@@ -45,7 +45,8 @@ Requirements: a web server running PHP.
 2. Make a [jocly2](https://github.com/fhoudebert/jocly2) build reachable from your site (the
    `jocly.js` bundle and its games).
 3. Create a directory for match files, writable by the web server — ideally **outside** the web
-   root, or at least with directory listing disabled.
+   root. If it must stay inside, copy `saves.htaccess.example` into it as `.htaccess` (Apache), so
+   that nobody can list or download the match files.
 4. Copy `localconf.php.example` to `localconf.php` and fill in the four required settings:
 
    ```php

@@ -1,0 +1,24 @@
+# A copier sous le nom .htaccess dans le repertoire des parties ($savePath,
+# "saves/" par defaut), si celui-ci se trouve sous la racine web.
+#
+# Interdit tout acces HTTP a ce repertoire : listage compris, qui livrerait
+# tous les identifiants de partie, donc le droit de jouer l'un ou l'autre camp.
+# Rien n'est casse : fileio.php et le serveur push (push/server.js) lisent ces
+# fichiers par le systeme de fichiers, jamais par HTTP.
+#
+# Apache seulement. Sous nginx, ce fichier est ignore : ajouter a la place
+#     location ^~ /joclymatch/saves/ { deny all; }
+#
+# Pas de directive "Options" ici : un hebergeur qui ne l'autorise pas
+# (AllowOverride sans Options) repondrait 500 sur tout le repertoire.
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>

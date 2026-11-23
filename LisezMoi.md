@@ -50,7 +50,8 @@ Prérequis : un serveur web avec PHP.
 2. Rendez accessible depuis votre site une construction de
    [jocly2](https://github.com/fhoudebert/jocly2) (le paquet `jocly.js` et ses jeux).
 3. Créez un répertoire pour les fichiers de partie, accessible en écriture au serveur web —
-   idéalement **hors** de la racine web, ou au moins sans affichage du contenu du répertoire.
+   idéalement **hors** de la racine web. S'il doit y rester, copiez-y `saves.htaccess.example` sous
+   le nom `.htaccess` (Apache), pour que personne ne puisse lister ni télécharger les parties.
 4. Copiez `localconf.php.example` en `localconf.php` et renseignez les quatre réglages
    obligatoires :
 

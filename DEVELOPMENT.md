@@ -31,9 +31,14 @@ iconv -f UTF-16 -t UTF-8 localconf.php > localconf.tmp && mv localconf.tmp local
 ### Where to put match files
 
 `$savePath` holds every match and chat file, named after the match id. Place it **outside the
-web root** when the host allows it. Otherwise, disable directory listing for it (for Apache, an
-`.htaccess` containing `Options -Indexes`, or `Require all denied` since only `fileio.php` needs
-to read it): a listing would hand out every match id, and with it the right to play either side.
+web root** when the host allows it. Otherwise copy `saves.htaccess.example` into it as
+`.htaccess`: it denies all HTTP access (Apache 2.2 and 2.4), listing included — a listing would
+hand out every match id, and with it the right to play either side. Nothing breaks: `fileio.php`
+and `push/server.js` read these files from the filesystem, never over HTTP. Under nginx the file
+is ignored; use `location ^~ /joclymatch/saves/ { deny all; }` instead.
+
+Checked on Apache 2.4 with `AllowOverride All` and `Options +Indexes`: with the file, the
+directory, a match file and the `.htaccess` itself answer 403; without it, 200.
 
 ### Expiry and limits
 
